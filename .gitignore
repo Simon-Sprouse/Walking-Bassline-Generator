@@ -1,0 +1,82 @@
+# ========================
+# .NET / Blazor WebAssembly
+# ========================
+
+# Build output
+bin/
+obj/
+*/bin/
+*/obj/
+
+# User-specific files
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider / VS Code / VS
+.vscode/
+.idea/
+*.DotSettings.user
+
+# Publish output
+wwwroot/dist/
+dist/
+build/
+publish/
+out/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.vspscc
+*.vssscc
+*.dbmdl
+*.bak
+*.ncb
+*.opendb
+*.VC.db
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+.nuget/
+
+# Cache / lock files
+project.lock.json
+artifacts/
+TestResults/
+.vs/
+_ReSharper.Caches/
+
+# ========================
+# macOS
+# ========================
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+__MACOSX/
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ========================
+# Node / Web Assets (optional)
+# ========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# ========================
+# JetBrains Rider
+# ========================
+.idea/
+*.sln.iml
