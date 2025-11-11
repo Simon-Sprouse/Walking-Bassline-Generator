@@ -1,7 +1,26 @@
 ﻿@page "/"
+@using BlazorWalkingBassline.Models
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Walking Basslines</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>Walking Bassline Generator</h1>
 
-<p>Welcome to the Blazor Walking Bassline App</p>
+@foreach (var chord in progression.Chords) 
+{ 
+    <p>@chord.ToString()</p>
+}
+
+@code { 
+
+    private Progression progression = new Progression(
+        "C",
+        new List<Chord> { 
+            new Chord(ScaleDegree.One),
+            new Chord(ScaleDegree.Three),
+            new Chord(ScaleDegree.Four),
+            new Chord(ScaleDegree.Four, ChordQuality.Minor)
+        }
+    );
+
+
+}
