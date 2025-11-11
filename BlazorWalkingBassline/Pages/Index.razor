@@ -1,26 +1,54 @@
 ﻿@page "/"
 @using BlazorWalkingBassline.Models
+@using BlazorWalkingBassline.MusicTheory
 
 <PageTitle>Walking Basslines</PageTitle>
 
 <h1>Walking Bassline Generator</h1>
 
+<h2>Chords in Progression</h2>
 @foreach (var chord in progression.Chords) 
 { 
     <p>@chord.ToString()</p>
 }
 
-@code { 
+<h2>Generated Chord Notes (Midi Number)</h2>
+@foreach (var pair in chordNotesList)
+{
+    <p>@pair.chord: @string.Join(", ", pair.notes)</p>
+}
 
-    private Progression progression = new Progression(
-        "C",
-        new List<Chord> { 
-            new Chord(ScaleDegree.One),
-            new Chord(ScaleDegree.Three),
-            new Chord(ScaleDegree.Four),
-            new Chord(ScaleDegree.Four, ChordQuality.Minor)
-        }
-    );
+<h2>Generated Chord Names (Midi Number)</h2>
+@foreach (var pair in chordNotesList)
+{
+    <p>@pair.chord: @string.Join(", ", pair.notes.Select(m => generator.NoteFromMidi(m)))</p>
+}
 
+@code {
+
+    private Progression progression;
+    private Generator generator;
+    private List<(Chord chord, List<int> notes)> chordNotesList;
+
+    protected override void OnInitialized()
+    {
+        // Initialize progression
+        progression = new Progression(
+            "C",
+            new List<Chord>
+            {
+                new Chord(ScaleDegree.One),
+                new Chord(ScaleDegree.Five),
+                new Chord(ScaleDegree.Two),
+                new Chord(ScaleDegree.Four)
+            }
+        );
+
+        // Initialize generator
+        generator = new Generator(progression);
+
+        // Generate chord notes
+        chordNotesList = generator.GenerateChordNotes();
+    }
 
 }
