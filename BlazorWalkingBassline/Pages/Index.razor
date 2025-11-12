@@ -36,6 +36,10 @@
 <button @onclick="StartAudio">Start Audio</button>
 <button @onclick="PlayTone">Play Note</button>
 
+<h2>Audio File Generation</h2>
+<button @onclick="GenerateAudioFile">Generate Audio File</button>
+<button @onclick="PlayGeneratedAudio">Play Generated Audio</button>
+
 @code {
 
     private Progression progression;
@@ -96,6 +100,16 @@
         }
 
         await JS.InvokeVoidAsync("toneInterop.playNote", "C3", "8n");
+    }
+
+    private async Task GenerateAudioFile()
+    {
+        await JS.InvokeVoidAsync("toneInterop.generateAudioFile");
+    }
+
+    private async Task PlayGeneratedAudio()
+    {
+        await JS.InvokeVoidAsync("toneInterop.playGeneratedAudio");
     }
     
 }
