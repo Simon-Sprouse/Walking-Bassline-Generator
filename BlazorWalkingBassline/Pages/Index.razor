@@ -39,6 +39,8 @@
 <h2>Audio File Generation</h2>
 <button @onclick="GenerateAudioFile">Generate Audio File</button>
 <button @onclick="PlayGeneratedAudio">Play Generated Audio</button>
+<button @onclick="PauseAudio">Pause Audio</button>
+<button @onclick="StopAudio">Stop Audio</button>
 
 @code {
 
@@ -112,4 +114,16 @@
         await JS.InvokeVoidAsync("toneInterop.playGeneratedAudio");
     }
     
+    private async Task StopAudio() 
+    {
+        // resets playhead
+        await JS.InvokeVoidAsync("toneInterop.stopAudio");
+    }
+
+    private async Task PauseAudio() 
+    { 
+        await JS.InvokeVoidAsync("toneInterop.pauseAudio");
+    }
+
+
 }

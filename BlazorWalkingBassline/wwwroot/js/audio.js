@@ -1,6 +1,15 @@
 window.toneInterop = {
+
     synth: null,
-    audioStarted: false,
+    audioStarted: false, // browser requires user click before sound can play
+
+    // store audio context 
+    audioContext: null,
+    generatedBuffer: null,
+    audioPlayer: null,
+    isPlaying: false,
+    startTime: 0,       // track when playback started
+    pauseOffset: 0,     // secones into buffer when paused
 
     init() {
         if (window.Tone) {
@@ -11,6 +20,11 @@ window.toneInterop = {
     },
 
     startAudio() {
+
+        if (!this.audioContext) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
         // Must be called on a user gesture
         return Tone.start().then(() => {
             console.log("AudioContext started:", Tone.context.state);
@@ -125,20 +139,17 @@ window.toneInterop = {
         return new Blob([buffer], { type: "audio/wav" });
     },
 
-    async playGeneratedAudio() {
-        if (!this.generatedBuffer) {
-            console.warn("⚠️ No generated audio buffer found. Please generate first!");
-            return;
-        }
+    playGeneratedAudio() {
+        if (this.isPlaying) return console.warn("Already playing!");
+        if (!this.generatedBuffer) return console.warn("No buffer yet!");
+        const context = this.audioContext;
 
-        const context = new (window.AudioContext || window.webkitAudioContext)();
-
-        // Convert Tone.js AudioBuffer to native Web Audio buffer
         const numChannels = this.generatedBuffer.numberOfChannels;
-        const length = this.generatedBuffer.length;
-        const sampleRate = this.generatedBuffer.sampleRate;
-
-        const nativeBuffer = context.createBuffer(numChannels, length, sampleRate);
+        const nativeBuffer = context.createBuffer(
+            numChannels,
+            this.generatedBuffer.length,
+            this.generatedBuffer.sampleRate
+        );
 
         for (let i = 0; i < numChannels; i++) {
             nativeBuffer.copyToChannel(this.generatedBuffer.getChannelData(i), i);
@@ -147,10 +158,54 @@ window.toneInterop = {
         const source = context.createBufferSource();
         source.buffer = nativeBuffer;
         source.connect(context.destination);
-        source.start(0);
+
+        const offset = this.pauseOffset; // resume from paused position
+        source.start(0, offset);
+
+        console.log("Offset: ", offset);
 
         this.audioPlayer = source;
-        console.log("▶️ Playing generated audio...");
+        this.startTime = context.currentTime - offset;
+        this.isPlaying = true;
+
+        source.onended = () => {
+            if (this.isPlaying) {
+                // playback reached the end naturally
+                this.pauseOffset = 0;
+                console.log("Playback finished.");
+            }
+            this.isPlaying = false;
+            this.audioPlayer = null;
+        };
+    },
+
+    pauseAudio() {
+        if (!this.isPlaying || !this.audioPlayer) return;
+        const context = this.audioContext;
+
+        // calculate how many seconds have already played
+        this.pauseOffset = context.currentTime - this.startTime;
+
+        // stop current node
+        this.audioPlayer.stop();
+        this.isPlaying = false;
+        console.log(`⏸️ Playback paused at ${this.pauseOffset.toFixed(2)}s`);
+    },
+
+    resumeAudio() {
+        if (this.isPlaying) return console.warn("Already playing!");
+        if (!this.generatedBuffer) return console.warn("No buffer yet!");
+        this.playGeneratedAudio(); // will use pauseOffset to resume
+        console.log("▶️ Resuming playback...");
+    },
+
+    stopAudio() {
+        if (this.audioPlayer) {
+            this.audioPlayer.stop();
+            this.isPlaying = false;
+            this.pauseOffset = 0;
+            console.log("⏹️ Playback stopped");
+        }
     }
 
 
