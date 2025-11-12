@@ -24,11 +24,17 @@
     <p>@pair.chord: @string.Join(", ", pair.notes.Select(m => generator.NoteFromMidi(m)))</p>
 }
 
+<h2>ASCII Bass Tab Prototype</h2>
+
+<pre>@TabFormatter.RenderTextTab(tabNotes)</pre>
+
 @code {
 
     private Progression progression;
     private Generator generator;
     private List<(Chord chord, List<int> notes)> chordNotesList;
+
+    private List<TabNote> tabNotes;
 
     protected override void OnInitialized()
     {
@@ -49,6 +55,20 @@
 
         // Generate chord notes
         chordNotesList = generator.GenerateChordNotes();
+
+
+
+        tabNotes = new List<TabNote>
+        {
+            new TabNote(3, 3, 1), // A string, fret 3
+            new TabNote(2, 5, 2), // D string, fret 5
+            new TabNote(2, 3, 3), // D string, fret 3
+            new TabNote(3, 11, 4)  // A string, fret 5
+        };
     }
 
+
+    
+
+    
 }
