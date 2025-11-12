@@ -26,7 +26,7 @@
 
 <h2>ASCII Bass Tab Prototype</h2>
 
-<pre>@TabFormatter.RenderTextTab(tabNotes)</pre>
+<pre>@TabFormatter.RenderAscii(tabNotesList)</pre>
 
 @code {
 
@@ -34,7 +34,7 @@
     private Generator generator;
     private List<(Chord chord, List<int> notes)> chordNotesList;
 
-    private List<TabNote> tabNotes;
+    private List<(Chord chord, List<TabNote>)> tabNotesList;
 
     protected override void OnInitialized()
     {
@@ -58,13 +58,13 @@
 
 
 
-        tabNotes = new List<TabNote>
-        {
-            new TabNote(3, 3, 1), // A string, fret 3
-            new TabNote(2, 5, 2), // D string, fret 5
-            new TabNote(2, 3, 3), // D string, fret 3
-            new TabNote(3, 11, 4)  // A string, fret 5
-        };
+        // Map generated chord MIDI notes to TabNotes using the greedy fretboard mapper
+        tabNotesList = FretboardMapper.MapChordsToTab(chordNotesList);
+
+
+
+
+
     }
 
 
