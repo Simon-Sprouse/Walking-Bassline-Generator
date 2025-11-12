@@ -76,27 +76,19 @@ public class Generator
     // Take a note name ("C", "C#", etc.) and return the lowest possible MIDI number >= 28
     private int LowestMidiFromNote(string note)
     {
-        // Find index for the target note
         int noteIndex = Array.IndexOf(Notes, note);
-
         if (noteIndex == -1)
-            throw new Exception($"Note '{note}' not found in chromatic scale.");
+            throw new Exception($"Note '{note}' not found.");
 
+        int midi = noteIndex; // start at C0 = 0 semitones
 
-        // Base reference: C = MIDI 4 (C0)
-        int cMidi = 4;
-
-        // Starting MIDI note for this pitch class
-        int midi = cMidi + noteIndex;
-
-        // Raise by octaves (12 semitones) until at least E1 (MIDI 28) TODO: make lowest note dynamic for B-string bass later on
+        // Raise by octaves until >= 28 (E1)
         while (midi < 28)
-        {
             midi += 12;
-        }
 
         return midi;
     }
+
 
     // Helper to pick modal interval set based on degree + chord quality
     private static int[] GetModalIntervals(ScaleDegree degree, ChordQuality? quality)
@@ -123,6 +115,9 @@ public class Generator
 
         foreach (var chord in progression.Chords)
         {
+
+            Console.WriteLine("Chord: " + chord.ToString());
+
             // --- Step 1: Get modal intervals for this chord ---
             int[] modeIntervals = GetModalIntervals(chord.Degree, chord.Quality);
 
@@ -153,8 +148,8 @@ public class Generator
     public string NoteFromMidi(int midi)
     {
         // Offset to align C1 = MIDI 4
-        int noteIndex = (midi + 8) % 12;
-        int octave = (midi + 8) / 12;
+        int noteIndex = midi % 12;
+        int octave = midi / 12;
         return $"{Notes[noteIndex]}{octave}";
     }
 
