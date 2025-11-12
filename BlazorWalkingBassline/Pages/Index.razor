@@ -2,6 +2,8 @@
 @using BlazorWalkingBassline.Models
 @using BlazorWalkingBassline.MusicTheory
 
+@inject IJSRuntime JS
+
 <PageTitle>Walking Basslines</PageTitle>
 
 <h1>Walking Bassline Generator</h1>
@@ -28,6 +30,12 @@
 
 <pre>@TabFormatter.RenderAscii(tabNotesList)</pre>
 
+
+<h2>Test JS Interop</h2>
+<button @onclick="RunTest">Run JS Test</button>
+<button @onclick="StartAudio">Start Audio</button>
+<button @onclick="PlayTone">Play Note</button>
+
 @code {
 
     private Progression progression;
@@ -40,7 +48,7 @@
     {
         // Initialize progression
         progression = new Progression(
-            "C",
+            "G",
             new List<Chord>
             {
                 new Chord(ScaleDegree.One),
@@ -62,14 +70,32 @@
         // Map generated chord MIDI notes to TabNotes using the greedy fretboard mapper
         tabNotesList = FretboardMapper.MapChordsToTab(chordNotesList);
 
-
-
-
-
     }
 
 
-    
+    private async Task RunTest() 
+    {
+        await JS.InvokeVoidAsync("testJS");
+    }
 
+
+    private bool audioStarted = false;
+
+    private async Task StartAudio()
+    {
+        await JS.InvokeVoidAsync("toneInterop.startAudio");
+        audioStarted = true;
+    }
+
+    private async Task PlayTone()
+    {
+        if (!audioStarted)
+        {
+            Console.WriteLine("⚠️ Please start audio first!");
+            return;
+        }
+
+        await JS.InvokeVoidAsync("toneInterop.playNote", "C3", "8n");
+    }
     
 }
