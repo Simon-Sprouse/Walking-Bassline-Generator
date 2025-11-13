@@ -4,14 +4,20 @@ public class Chord
 {
 
     public ScaleDegree Degree { get; } // I, IV, V
-    public ChordQuality? Quality { get; } // Major, Minor
+    public ChordQuality Quality { get; } // Major, Minor
+    public int Measure { get; }
+    public double Beat { get; }
+    public double Duration { get; }
 
 
     // constructor
-    public Chord(ScaleDegree degree, ChordQuality? quality = null)
+    public Chord(ScaleDegree _degree, ChordQuality _quality, int _measure, double _beat, double _duration)
     {
-        Degree = degree;
-        Quality = quality;
+        Degree = _degree;
+        Quality = _quality;
+        Measure = _measure;
+        Beat = _beat;
+        Duration = _duration;
     }
 
     public override string ToString()

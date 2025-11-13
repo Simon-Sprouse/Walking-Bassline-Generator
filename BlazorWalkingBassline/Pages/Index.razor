@@ -8,13 +8,18 @@
 
 <h1>Walking Bassline Generator</h1>
 
-<h2>Chords in Progression</h2>
-@foreach (var chord in progression.Chords) 
+<h2>Progression</h2>
+<p>Key: @progression.Key</p>
+<p>Chords: @string.Join(", ", progression.Chords)</p>
+
+
+<h2>Generated Notes</h2>
+@foreach (Note note in progression.Notes) 
 { 
-    <p>@chord.ToString()</p>
+    <p>@note @generator.NoteFromMidi(note.MidiNumber)</p>
 }
 
-<h2>Generated Chord Notes (Midi Number)</h2>
+@* <h2>Generated Chord Notes (Midi Number)</h2>
 @foreach (var pair in chordNotesList)
 {
     <p>@pair.chord: @string.Join(", ", pair.notes)</p>
@@ -40,41 +45,53 @@
 <button @onclick="GenerateAudioFile">Generate Audio File</button>
 <button @onclick="PlayGeneratedAudio">Play Generated Audio</button>
 <button @onclick="PauseAudio">Pause Audio</button>
-<button @onclick="StopAudio">Stop Audio</button>
+<button @onclick="StopAudio">Stop Audio</button> *@
 
 @code {
 
     private Progression progression;
-    private Generator generator;
-    private List<(Chord chord, List<int> notes)> chordNotesList;
+    private IProgressionGenerator generator;
+    @* private List<(Chord chord, List<int> notes)> chordNotesList;
 
-    private List<(Chord chord, List<TabNote>)> tabNotesList;
+    private List<(Chord chord, List<TabNote>)> tabNotesList; *@
 
     protected override void OnInitialized()
     {
-        // Initialize progression
-        progression = new Progression(
-            "G",
-            new List<Chord>
-            {
-                new Chord(ScaleDegree.One),
-                new Chord(ScaleDegree.Five),
-                new Chord(ScaleDegree.Two),
-                new Chord(ScaleDegree.Four)
-            }
-        );
 
         // Initialize generator
-        generator = new Generator(progression);
+        int[] formula = { 1, 3, 5, 3 };
+        generator = new Generator(formula);
 
-        // Generate chord notes
+        // Initialize progression
+        double beat = 1; // TODO make dynamic (right now we assume every chord starts on first beat)
+        double duration = 4; // TODO later make this dynamic
+        string key = "G";
+        List<Chord> chords = new List<Chord>
+            {
+                new Chord(ScaleDegree.One, ChordQuality.Major, 1, beat, duration),
+                new Chord(ScaleDegree.Five, ChordQuality.Major, 2, beat, duration),
+                new Chord(ScaleDegree.Two, ChordQuality.Minor, 3, beat, duration),
+                new Chord(ScaleDegree.Four, ChordQuality.Major, 4, beat, duration)
+            };
+
+        progression = new Progression(key, chords, generator);
+
+
+
+
+
+
+
+        
+
+        @* // Generate chord notes
         Console.WriteLine("Generating Chords");
         chordNotesList = generator.GenerateChordNotes();
 
 
 
         // Map generated chord MIDI notes to TabNotes using the greedy fretboard mapper
-        tabNotesList = FretboardMapper.MapChordsToTab(chordNotesList);
+        tabNotesList = FretboardMapper.MapChordsToTab(chordNotesList); *@
 
     }
 

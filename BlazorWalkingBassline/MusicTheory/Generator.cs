@@ -4,10 +4,12 @@ using System;
 using System.Collections.Generic;
 using BlazorWalkingBassline.Models;
 
-public class Generator
+
+
+public class Generator : IProgressionGenerator
 {
-    private Progression progression;
-    private int[] formula = { 1, 3, 5, 3 }; // TODO make this dynamic and add to constructor
+
+    private readonly int[] Formula;
 
     private readonly string[] Notes =
             { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
@@ -46,9 +48,9 @@ public class Generator
 
 
     // constructor
-    public Generator(Progression _progression)
+    public Generator(int[] _formula)
     {
-        progression = _progression;
+        Formula = _formula;
     }
 
 
@@ -94,10 +96,12 @@ public class Generator
     private static int[] GetModalIntervals(ScaleDegree degree, ChordQuality? quality)
     {
         // Default mode based on degree (major scale harmony)
+        // TODO handle borrowed chords
         if (DegreeToModeIntervals.TryGetValue(degree, out var mode))
             return mode;
 
         // Fallback by chord quality (use Ionian for major, Aeolian for minor, Locrian for diminished)
+        // TODO handle borrowed chords
         return quality switch
         {
             ChordQuality.Major => DegreeToModeIntervals[ScaleDegree.One],
@@ -109,11 +113,11 @@ public class Generator
 
 
 
-    public List<(Chord chord, List<int> midiNotes)> GenerateChordNotes()
+    public List<Note> GenerateNotes(List<Chord> chords, string key)
     {
-        var result = new List<(Chord, List<int>)>();
+        var result = new List<Note>();
 
-        foreach (var chord in progression.Chords)
+        foreach (var chord in chords)
         {
 
             Console.WriteLine("Chord: " + chord.ToString());
@@ -122,29 +126,35 @@ public class Generator
             int[] modeIntervals = GetModalIntervals(chord.Degree, chord.Quality);
 
             // --- Step 2: Determine the root note (string + MIDI) ---
-            string chordRootNote = GetRootNoteFromDegree(progression.Key, chord.Degree);
+            string chordRootNote = GetRootNoteFromDegree(key, chord.Degree);
             int chordRootMidi = LowestMidiFromNote(chordRootNote);
 
-            // --- Step 3: Build MIDI notes using formula ---
-            var chordMidiNotes = new List<int>();
-            for (int j = 0; j < formula.Length; j++)
+            // --- Step 3: Build MIDI notes using Formula ---
+            // TODO update / extend formula for chords with different than 4 beats
+   
+            for (int j = 0; j < Formula.Length; j++)
             {
-                int modeIndex = formula[j] - 1; // 1-based formula
+                int modeIndex = Formula[j] - 1; // 1-based Formula
                 if (modeIndex < 0 || modeIndex >= modeIntervals.Length)
-                    throw new Exception($"Formula index {formula[j]} is out of bounds for mode intervals.");
+                    throw new Exception($"Formula index {Formula[j]} is out of bounds for mode intervals.");
 
                 int semitoneOffset = modeIntervals[modeIndex];
                 int noteMidi = chordRootMidi + semitoneOffset;
-                chordMidiNotes.Add(noteMidi);
+
+                int beat = j + 1; // TODO make this sentinel
+                int duration = 1;
+                Note newNote = new Note(noteMidi, chord.Measure, beat, duration);
+                result.Add(newNote);
+
             }
 
-            // --- Step 4: Add to result ---
-            result.Add((chord, chordMidiNotes));
+
         }
 
         return result;
     }
 
+    // TODO, is this the best place for this function?
     public string NoteFromMidi(int midi)
     {
         // Offset to align C1 = MIDI 4
