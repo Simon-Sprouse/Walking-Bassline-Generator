@@ -19,21 +19,141 @@
     <p>@note @generator.NoteFromMidi(note.MidiNumber)</p>
 }
 
-@* <h2>Generated Chord Notes (Midi Number)</h2>
-@foreach (var pair in chordNotesList)
-{
-    <p>@pair.chord: @string.Join(", ", pair.notes)</p>
+<h2>Generated Tab Notes</h2>
+@foreach (TabNote tabNote in tabNotes) 
+{ 
+    <p>@tabNote</p>
 }
 
-<h2>Generated Chord Names (Midi Number)</h2>
-@foreach (var pair in chordNotesList)
+
+
+
+
+<style>
+    /* CRITICAL: Use a monospaced font for perfect ASCII alignment */
+    .tab-output {
+        font-family: 'Courier New', monospace;
+        font-size: 1.2rem;
+        line-height: 1.25; /* Space out the lines slightly */
+        white-space: pre; /* Preserve whitespace exactly as formatted */
+        display: flex; /* Arrange columns horizontally */
+        flex-wrap: nowrap;
+        overflow-x: auto; /* Allow horizontal scrolling if the tab is very long */
+        background-color: #1e1e1e;
+        color: #e0e0e0;
+        border: 1px solid #444;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .tab-column-wrapper {
+        display: flex;
+        flex-direction: column;
+        text-align: center;
+        /* Padding to visually space out the columns slightly */
+        padding: 0 2px; 
+    }
+
+    /* Style for the static header (GDAE) */
+    .tab-header {
+        /* Fix the header width for better alignment */
+        width: 1rem; 
+        font-weight: bold;
+        color: #ff9800; /* Amber for tuning names */
+        border-right: 1px solid #555;
+        margin-right: 4px;
+        padding-right: 4px;
+        flex-shrink: 0; /* Prevents shrinking */
+    }
+
+    /* Style for content columns (notes/dashes) */
+    .tab-content {
+        min-width: @(SlotWidth)ch; /* Set minimum width based on slot width */
+        cursor: pointer;
+        transition: background-color 0.1s ease;
+    }
+
+    /* Style for bar lines (|) */
+    .tab-bar-line {
+        font-weight: bold;
+        color: #9e9e9e;
+        margin: 0 1px;
+        width: 1px; /* Minimal width for a clean vertical line */
+        flex-shrink: 0;
+    }
+
+    /* Span for each string line (ensures vertical stacking) */
+    .string-line {
+        display: block;
+    }
+    
+    /* Hover effect for content columns (will be replaced by animation later) */
+    .tab-content:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+</style>
+
+
+<h2>Bass Tab Preview</h2>
+
+<div class="tab-output">
+    @if (TabColumns.Any())
+    {
+        @foreach (var column in TabColumns)
+        {
+            if (column.Type == ColumnType.HeaderLine)
+            {
+                <div class="tab-header tab-column-wrapper">
+                    @foreach (var line in column.StringLines)
+                    {
+                        <span class="string-line">@line</span>
+                    }
+                </div>
+            }
+            else if (column.Type == ColumnType.BarLine)
+            {
+                <div class="tab-bar-line tab-column-wrapper" @onclick="() => HandleClick(column)">
+                    @foreach (var line in column.StringLines)
+                    {
+                        <span class="string-line">@line</span>
+                    }
+                </div>
+            }
+            else /* Content or Spacer column */
+            {
+                <div class="tab-content tab-column-wrapper" @onclick="() => HandleClick(column)">
+                    @foreach (var line in column.StringLines)
+                    {
+                        <span class="string-line">@line</span>
+                    }
+                </div>
+            }
+        }
+    }
+    else
+    {
+        <p>Generating Tab...</p>
+    }
+</div>
+
+@if (LastClickedColumn != null)
 {
-    <p>@pair.chord: @string.Join(", ", pair.notes.Select(m => generator.NoteFromMidi(m)))</p>
+    <p class="mt-4 text-sm text-gray-400">
+        Last Clicked Position: Measure @LastClickedColumn.Measure, Beat @LastClickedColumn.Beat
+        (@LastClickedColumn.Type)
+    </p>
 }
 
-<h2>ASCII Bass Tab Prototype</h2>
 
-<pre>@TabFormatter.RenderAscii(tabNotesList)</pre>
+
+
+
+
+
+
+
+
 
 
 <h2>Test JS Interop</h2>
@@ -45,12 +165,17 @@
 <button @onclick="GenerateAudioFile">Generate Audio File</button>
 <button @onclick="PlayGeneratedAudio">Play Generated Audio</button>
 <button @onclick="PauseAudio">Pause Audio</button>
-<button @onclick="StopAudio">Stop Audio</button> *@
+<button @onclick="StopAudio">Stop Audio</button>
 
 @code {
 
     private Progression progression;
     private IProgressionGenerator generator;
+
+    private List<TabNote> tabNotes;
+    private List<TabColumn> TabColumns { get; set; } = new();
+    private TabColumn? LastClickedColumn { get; set; }
+    public int SlotWidth = 6;
     @* private List<(Chord chord, List<int> notes)> chordNotesList;
 
     private List<(Chord chord, List<TabNote>)> tabNotesList; *@
@@ -75,25 +200,30 @@
             };
 
         progression = new Progression(key, chords, generator);
+        tabNotes = FretboardMapper.MapNotesToTab(progression.Notes);
 
-
-
-
-
-
-
-        
-
-        @* // Generate chord notes
-        Console.WriteLine("Generating Chords");
-        chordNotesList = generator.GenerateChordNotes();
-
-
-
-        // Map generated chord MIDI notes to TabNotes using the greedy fretboard mapper
-        tabNotesList = FretboardMapper.MapChordsToTab(chordNotesList); *@
+        TabColumns = TabFormatter.RenderAscii(tabNotes, SlotWidth);
 
     }
+
+
+
+    private void HandleClick(TabColumn column)
+    {
+        LastClickedColumn = column;
+
+    }
+
+
+
+
+
+
+
+
+
+
+
 
 
     private async Task RunTest() 
