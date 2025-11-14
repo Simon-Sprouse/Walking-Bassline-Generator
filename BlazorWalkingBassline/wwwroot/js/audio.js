@@ -234,23 +234,23 @@ window.toneInterop = {
         console.log("Starting playback at offset: ", offset);
 
         this.audioPlayer = source;
-        // CRITICAL FIX: Store the "virtual start time" 
-        // This represents when the playback "would have started" if we were at position 0
-        // So: virtualStartTime = actualStartTime - offsetInBuffer
         this.startTime = context.currentTime - offset;
         this.isPlaying = true;
         this._startPlaybackTimer();
 
+        // CRITICAL FIX: Store reference to current source to prevent race conditions
+        const currentSource = source;
         source.onended = () => {
-            if (this.isPlaying) {
+            // Only process onended if this is still the active source
+            if (this.audioPlayer === currentSource && this.isPlaying) {
                 this.pauseOffset = 0;
+                this.isPlaying = false;
+                this.audioPlayer = null;
                 console.log("Playback finished.");
                 if (this.dotNetRef) {
                     this.dotNetRef.invokeMethodAsync('SetHighlightColumn', -1);
                 }
             }
-            this.isPlaying = false;
-            this.audioPlayer = null;
         };
     },
 
@@ -258,99 +258,86 @@ window.toneInterop = {
         if (!this.isPlaying || !this.audioPlayer) return;
         const context = this.audioContext;
 
-        // CRITICAL FIX: Calculate how far into the buffer we are
-        // Since startTime = context.currentTime - offset when we started playing,
-        // The current position = context.currentTime - startTime
         this.pauseOffset = context.currentTime - this.startTime;
 
+        // Stop the source and clear reference
         this.audioPlayer.stop();
+        this.audioPlayer = null;
         this.isPlaying = false;
-        clearInterval(this.timerID);
-        this.timerID = null;
+        
+        if (this.timerID) {
+            clearInterval(this.timerID);
+            this.timerID = null;
+        }
 
         console.log(`⏸️ Playback paused at ${this.pauseOffset.toFixed(2)}s`);
     },
-    
-    // New simpler seek function that takes time directly
+
     seekToTime(timeInSeconds) {
         if (!this.generatedBuffer) return console.warn("No buffer yet!");
         
-        // Remember if we were playing before the seek
         const wasPlaying = this.isPlaying;
         
-        // Stop current playback if active (this will clear the timer and stop audio)
-        if (this.isPlaying) {
-            // Manually stop the audio source
-            if (this.audioPlayer) {
-                this.audioPlayer.stop();
-                this.audioPlayer = null;
-            }
-            // Clear the timer
+        // Stop current playback completely
+        if (this.isPlaying || this.audioPlayer) {
+            // Clear timer first
             if (this.timerID) {
                 clearInterval(this.timerID);
                 this.timerID = null;
             }
-            // Mark as not playing (but don't reset pauseOffset yet)
+            
+            // Stop and clear audio source
+            if (this.audioPlayer) {
+                this.audioPlayer.stop();
+                this.audioPlayer = null;
+            }
+            
+            // Reset playing state
             this.isPlaying = false;
         }
         
-        // Set the new offset (this works whether paused or stopped)
+        // Set the new offset
         this.pauseOffset = timeInSeconds;
         
-        // Update the visual highlight to match the new position
+        // Update visual highlight immediately
         if (this.dotNetRef) {
             const columnIndex = this._getTimeColumnIndex(timeInSeconds);
             this.dotNetRef.invokeMethodAsync('SetHighlightColumn', columnIndex);
         }
         
-        // Only resume playback if we were playing before the seek
+        // Resume if we were playing
         if (wasPlaying) {
-            this.resumeAudio();
+            // Small delay to ensure cleanup is complete
+            setTimeout(() => {
+                this.playGeneratedAudio();
+            }, 10);
         }
         
         console.log(`Seeked to ${timeInSeconds.toFixed(2)}s ${wasPlaying ? '(resuming playback)' : '(staying paused)'}`);
     },
 
-    // Keep the old function for backwards compatibility if needed
-    seekGeneratedAudio(columnIndex) {
-        if (!this.generatedBuffer) return console.warn("No buffer yet!");
-        
-        let targetOffset = 0;
-        
-        const clickedNote = this.allNotes.find(note => note.columnIndex === columnIndex);
-        
-        if (clickedNote) {
-            targetOffset = clickedNote.time;
-        } else {
-            console.warn(`Could not find note data for column index ${columnIndex}. Seeking to 0.`);
-            targetOffset = 0;
-        }
-
-        // Just call the new seekToTime function
-        this.seekToTime(targetOffset);
-    },
-
-    resumeAudio() {
-        if (this.isPlaying) return console.warn("Already playing!");
-        if (!this.generatedBuffer) return console.warn("No buffer yet!");
-        this.playGeneratedAudio();
-        console.log("▶️ Resuming playback...");
-    },
-
     stopAudio() {
-        if (this.audioPlayer) {
-            this.audioPlayer.stop();
-            this.isPlaying = false;
-            this.pauseOffset = 0;
+        // Clear timer first
+        if (this.timerID) {
             clearInterval(this.timerID);
             this.timerID = null;
-
-            // Clear the visual highlight when stopped
-            if (this.dotNetRef) {
-                this.dotNetRef.invokeMethodAsync('SetHighlightColumn', -1);
-            }
-
-            console.log("⏹️ Playback stopped");
         }
+        
+        // Stop and clear audio source
+        if (this.audioPlayer) {
+            this.audioPlayer.stop();
+            this.audioPlayer = null;
+        }
+        
+        // Reset state
+        this.isPlaying = false;
+        this.pauseOffset = 0;
+
+        // Clear visual highlight
+        if (this.dotNetRef) {
+            this.dotNetRef.invokeMethodAsync('SetHighlightColumn', -1);
+        }
+
+        console.log("⏹️ Playback stopped");
     }
 };
