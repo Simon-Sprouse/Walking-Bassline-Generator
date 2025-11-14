@@ -50,36 +50,70 @@ window.toneInterop = {
 
             transport.bpm.value = bpm;
 
-            const bassSynth = new Tone.MonoSynth({
-                oscillator: {
-                    type: "sine5",
-                    modulationIndex: 2,
-                    harmonicity: 1.5
-                },
-                filter: {
-                    Q: 2,
-                    type: "lowpass",
-                    rolloff: -24
-                },
-                envelope: {
-                    attack: 0.01,
-                    decay: 0.3,
-                    sustain: 0.5,
-                    release: 0.8
-                },
-                filterEnvelope: {
-                    attack: 0.01,
-                    decay: 0.3,
-                    sustain: 0.5,
-                    release: 0.8,
-                    baseFrequency: 100,
-                    octaves: 4
-                }
+            // ==================================================
+            // ========== P-BASS SYNTH CHAIN (DROP-IN) ==========
+            // ==================================================
+
+            // AMP ENVELOPE — realistic bass envelope
+            const bassAmp = new Tone.AmplitudeEnvelope({
+                attack: 0.003,
+                decay: 0.12,
+                sustain: 0.7,
+                release: 0.25
             }).toDestination();
 
+            // FILTER — P-Bass warmth & audibility
+            const bassFilter = new Tone.Filter({
+                type: "lowpass",
+                frequency: 750,
+                rolloff: -24,
+                Q: 0.8
+            }).connect(bassAmp);
+
+            // Saturation (pickup simulation)
+            const saturator = new Tone.WaveShaper(x => Math.tanh(x * 1.6))
+                .connect(bassFilter);
+
+            // Fundamental sine
+            const osc1 = new Tone.Oscillator({
+                type: "sine"
+            }).connect(saturator).start();
+
+            // 2nd harmonic — gives body, not a chord
+            const osc2 = new Tone.Oscillator({
+                type: "sine",
+                volume: -10
+            }).connect(saturator).start();
+
+            // Pluck noise — simulates string attack
+            const pluck = new Tone.NoiseSynth({
+                noise: { type: "white" },
+                envelope: {
+                    attack: 0.001,
+                    decay: 0.015,
+                    sustain: 0
+                },
+                volume: -22
+            }).connect(bassFilter);
+
+            // ==================================================
+            // =============== NOTE SEQUENCING ==================
+            // ==================================================
+
             const part = new Tone.Part((time, value) => {
+
                 const freq = Tone.Midi(value.midi).toFrequency();
-                bassSynth.triggerAttackRelease(freq, value.duration, time);
+
+                // Set fundamental + harmonic frequencies
+                osc1.frequency.setValueAtTime(freq, time);
+                osc2.frequency.setValueAtTime(freq * 2, time);
+
+                // Pluck attack
+                pluck.triggerAttackRelease(0.02, time);
+
+                // Body of the note
+                bassAmp.triggerAttackRelease(value.duration, time);
+
             }, notes).start(0);
 
             transport.start(0);
@@ -91,6 +125,7 @@ window.toneInterop = {
 
         return "MIDI track and audio buffer generated!";
     },
+
 
     startAudio() {
         if (!this.audioContext) {
