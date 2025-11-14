@@ -190,6 +190,8 @@
 <button @onclick="PauseAudio">Pause Audio</button>
 <button @onclick="StopAudio">Stop Audio</button>
 
+<p>Playhead: @_highlightedColumnIndex</p>
+
 @code {
 
     private Progression progression;
@@ -201,7 +203,7 @@
     public int SlotWidth = 6;
 
     private DotNetObjectReference<Index>? _dotNetRef;
-    private int _highlightedColumnIndex = -1; // -1 means no highlight
+    public int _highlightedColumnIndex = -1; // -1 means no highlight
 
 
     protected override void OnInitialized()
@@ -293,37 +295,53 @@
 
 
 
+
     // HandleClick now takes the column's index
-    private void HandleClick(TabColumn column, int index)
+    private async Task HandleClick(TabColumn column, int index)
     {
         LastClickedColumn = column;
-        // The playhead will now seek to this column
-
-        int m = column.Measure;
-        int real_index = (column.Measure - 1) * 4 + (int)column.Beat;
-        SeekToColumn(real_index);
-    }
-
-    private async Task SeekToColumn(int index)
-    {
-        // Update the visual playhead immediately
-        _highlightedColumnIndex = index;
-        StateHasChanged();
         
-        // Tell JavaScript to stop and restart audio at the time corresponding to this column index
-        await JS.InvokeVoidAsync("toneInterop.seekGeneratedAudio", index); 
+        // Calculate the time in seconds based on measure and beat
+        // This matches the same calculation used in GenerateMidiTrack
+        double absoluteBeat = (column.Measure - 1) * 4 + (column.Beat - 1);
+        double timeInSeconds = absoluteBeat * QuarterNoteDurationSeconds;
+        
+        // Seek to that time
+        await SeekToTime(timeInSeconds, index);
     }
-    
+
+    private async Task SeekToTime(double timeInSeconds, int columnIndex)
+    {
+        // DON'T update the visual playhead here - let JavaScript do it via SetHighlightColumn
+        // This prevents race conditions where C# sets it but JS immediately overrides it
+        
+        // Tell JavaScript to seek to this specific time
+        // JavaScript will call SetHighlightColumn with the correct index
+        await JS.InvokeVoidAsync("toneInterop.seekToTime", timeInSeconds); 
+    }
+
     // Update StopAudio to reset the playhead visually
     private async Task StopAudio() 
     {
         await JS.InvokeVoidAsync("toneInterop.stopAudio");
-        _highlightedColumnIndex = -1; // Reset visual playhead (or 0 for the header)
+        _highlightedColumnIndex = -1; // Reset visual playhead
+        StateHasChanged(); // Force UI update
     }
 
+    // Add this new method for the Play button to ensure playhead starts correctly
+    private async Task PlayGeneratedAudio()
+    {
+        await JS.InvokeVoidAsync("toneInterop.playGeneratedAudio");
+        // Don't set _highlightedColumnIndex here - let JavaScript control it via SetHighlightColumn
+    }
 
-
-
+    // Update PauseAudio to preserve the current playhead position
+    private async Task PauseAudio() 
+    { 
+        await JS.InvokeVoidAsync("toneInterop.pauseAudio");
+        // Don't clear _highlightedColumnIndex - keep it where it was paused
+        // The visual highlight should remain visible when paused
+    }
 
 
 
@@ -364,17 +382,6 @@
         await JS.InvokeVoidAsync("toneInterop.generateAudioFile");
     }
 
-    private async Task PlayGeneratedAudio()
-    {
-        await JS.InvokeVoidAsync("toneInterop.playGeneratedAudio");
-    }
-    
-
-
-    private async Task PauseAudio() 
-    { 
-        await JS.InvokeVoidAsync("toneInterop.pauseAudio");
-    }
 
 
 

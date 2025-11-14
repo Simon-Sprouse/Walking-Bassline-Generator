@@ -271,6 +271,47 @@ window.toneInterop = {
         console.log(`⏸️ Playback paused at ${this.pauseOffset.toFixed(2)}s`);
     },
     
+    // New simpler seek function that takes time directly
+    seekToTime(timeInSeconds) {
+        if (!this.generatedBuffer) return console.warn("No buffer yet!");
+        
+        // Remember if we were playing before the seek
+        const wasPlaying = this.isPlaying;
+        
+        // Stop current playback if active (this will clear the timer and stop audio)
+        if (this.isPlaying) {
+            // Manually stop the audio source
+            if (this.audioPlayer) {
+                this.audioPlayer.stop();
+                this.audioPlayer = null;
+            }
+            // Clear the timer
+            if (this.timerID) {
+                clearInterval(this.timerID);
+                this.timerID = null;
+            }
+            // Mark as not playing (but don't reset pauseOffset yet)
+            this.isPlaying = false;
+        }
+        
+        // Set the new offset (this works whether paused or stopped)
+        this.pauseOffset = timeInSeconds;
+        
+        // Update the visual highlight to match the new position
+        if (this.dotNetRef) {
+            const columnIndex = this._getTimeColumnIndex(timeInSeconds);
+            this.dotNetRef.invokeMethodAsync('SetHighlightColumn', columnIndex);
+        }
+        
+        // Only resume playback if we were playing before the seek
+        if (wasPlaying) {
+            this.resumeAudio();
+        }
+        
+        console.log(`Seeked to ${timeInSeconds.toFixed(2)}s ${wasPlaying ? '(resuming playback)' : '(staying paused)'}`);
+    },
+
+    // Keep the old function for backwards compatibility if needed
     seekGeneratedAudio(columnIndex) {
         if (!this.generatedBuffer) return console.warn("No buffer yet!");
         
@@ -285,18 +326,8 @@ window.toneInterop = {
             targetOffset = 0;
         }
 
-        // Stop current playback if active
-        if (this.isPlaying) {
-            this.pauseAudio(); 
-        }
-        
-        // Set the new offset
-        this.pauseOffset = targetOffset;
-        
-        // Resume playback from the new offset
-        this.resumeAudio();
-        
-        console.log(`Seeked to column ${columnIndex} (Time: ${targetOffset.toFixed(2)}s)`);
+        // Just call the new seekToTime function
+        this.seekToTime(targetOffset);
     },
 
     resumeAudio() {
@@ -313,6 +344,11 @@ window.toneInterop = {
             this.pauseOffset = 0;
             clearInterval(this.timerID);
             this.timerID = null;
+
+            // Clear the visual highlight when stopped
+            if (this.dotNetRef) {
+                this.dotNetRef.invokeMethodAsync('SetHighlightColumn', -1);
+            }
 
             console.log("⏹️ Playback stopped");
         }
