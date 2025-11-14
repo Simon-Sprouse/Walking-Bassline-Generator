@@ -16,7 +16,8 @@ speaker pop when audio cuts
 -----------
 Features
 -----------
-UI controls
+Tie buttons to functions
+UI controls for chord progression, bpm, style etc
 Change from roman numeral numbers to Nashville numbers
 Tab visual controls
 Audio playback

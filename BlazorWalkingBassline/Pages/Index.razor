@@ -4,115 +4,35 @@
 
 @inject IJSRuntime JS
 
-<PageTitle>Walking Basslines</PageTitle>
-
-<h1>Walking Bassline Generator</h1>
-
-<h2>Progression</h2>
-<p>Key: @progression.Key</p>
-<p>Chords: @string.Join(", ", progression.Chords)</p>
-
-
-<h2>Generated Notes</h2>
-@foreach (Note note in progression.Notes) 
-{ 
-    <p>@note @generator.NoteFromMidi(note.MidiNumber)</p>
-}
-
-<h2>Generated Tab Notes</h2>
-@foreach (TabNote tabNote in tabNotes) 
-{ 
-    <p>@tabNote</p>
-}
-
-
-
-
-
 <style>
-    /* CRITICAL: Use a monospaced font for perfect ASCII alignment */
-    .tab-output {
-        font-family: 'Courier New', monospace;
-        font-size: 1.2rem;
-        line-height: 1.25; /* Space out the lines slightly */
-        white-space: pre; /* Preserve whitespace exactly as formatted */
-        display: flex; /* Arrange columns horizontally */
-        flex-wrap: nowrap;
-        overflow-x: auto; /* Allow horizontal scrolling if the tab is very long */
-        background-color: #1e1e1e;
-        color: #e0e0e0;
-        border: 1px solid #444;
-        padding: 1rem;
-        border-radius: 8px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    :host {
+        --slot-width-ch: @(SlotWidth)ch;
     }
-
-    .tab-column-wrapper {
-        display: flex;
-        flex-direction: column;
-        text-align: center;
-        /* Padding to visually space out the columns slightly */
-        padding: 0 2px; 
-    }
-
-    /* Style for the static header (GDAE) */
-    .tab-header {
-        /* Fix the header width for better alignment */
-        width: 1rem; 
-        font-weight: bold;
-        color: #ff9800; /* Amber for tuning names */
-        border-right: 1px solid #555;
-        margin-right: 4px;
-        padding-right: 4px;
-        flex-shrink: 0; /* Prevents shrinking */
-    }
-
-    /* Style for content columns (notes/dashes) */
-    .tab-content {
-        min-width: @(SlotWidth)ch; /* Set minimum width based on slot width */
-        cursor: pointer;
-        transition: background-color 0.1s ease;
-    }
-
-
-    /* Style for bar lines (|) */
-    .tab-bar-line {
-        font-weight: bold;
-        color: #9e9e9e;
-        margin: 0 1px;
-        width: 1px; /* Minimal width for a clean vertical line */
-        flex-shrink: 0;
-    }
-
-    /* Span for each string line (ensures vertical stacking) */
-    .string-line {
-        display: block;
-    }
-    
-    /* Hover effect for content columns (will be replaced by animation later) */
-    .tab-content:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-
-
-
-
-    /* New style for the playhead highlight */
-    .playhead-highlight {
-        background-color: rgba(255, 165, 0, 0.4); /* Amber/Orange for emphasis */
-        /* Make sure the hover effect doesn't override the playhead */
-        transition: background-color 0.1s ease;
-    }
-
-    /* Keep hover effect but don't let it override the active playhead */
-    .tab-content:hover:not(.playhead-highlight) {
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-
-
 </style>
 
 
+
+<PageTitle>Walking Basslines</PageTitle>
+<h1>Walking Bassline Generator</h1>
+
+<button @onclick="GenerateMidiTrack">Allow Broswer Audio</button>
+<button @onclick="PlayGeneratedAudio">Play Audio</button>
+<button @onclick="PauseAudio">Pause Audio</button>
+<button @onclick="StopAudio">Stop Audio</button>
+<button @onclick="ToggleLooping" class="@(_isLooping ? "btn-success" : "btn-secondary")">
+    @if (_isLooping)
+    {
+        <span>✅ Looping ON</span>
+    }
+    else
+    {
+        <span>🔁 Looping OFF</span>
+    }
+</button>
+
+
+
+@* TODO This should be a component *@
 <h2>Bass Tab Preview</h2>
 <div class="tab-output">
     @if (TabColumns.Any())
@@ -145,7 +65,7 @@
             else /* Content column */
             {
                 @* This is now the ONLY clickable column type *@
-                <div class="tab-content tab-column-wrapper @columnClass" @onclick="() => HandleClick(column, i)">
+                <div class="tab-content tab-column-wrapper @columnClass" @onclick="() => HandleClick(column)">
                     @foreach (var line in column.StringLines)
                     {
                         <span class="string-line">@line</span>
@@ -160,92 +80,27 @@
     }
 </div>
 
-@if (LastClickedColumn != null)
-{
-    <p class="mt-4 text-sm text-gray-400">
-        Last Clicked Position: Measure @LastClickedColumn.Measure, Beat @LastClickedColumn.Beat
-        (@LastClickedColumn.Type)
-    </p>
-}
 
 
-
-
-
-
-
-
-
-
-
-
-<h2>Test JS Interop</h2>
-<button @onclick="RunTest">Run JS Test</button>
-<button @onclick="StartAudio">Start Audio</button>
-<button @onclick="PlayTone">Play Note</button>
-
-<h2>Audio File Generation</h2>
-<button @onclick="GenerateMidiTrack">Generate Audio File</button>
-<button @onclick="PlayGeneratedAudio">Play Generated Audio</button>
-<button @onclick="PauseAudio">Pause Audio</button>
-<button @onclick="StopAudio">Stop Audio</button>
-@* ⭐ NEW LOOP BUTTON *@
-<button @onclick="ToggleLooping" class="@(_isLooping ? "btn-success" : "btn-secondary")">
-    @if (_isLooping)
-    {
-        <span>✅ Looping ON</span>
-    }
-    else
-    {
-        <span>🔁 Looping OFF</span>
-    }
-</button>
-
-<p>Playhead: @_highlightedColumnIndex</p>
 
 @code {
 
+
+    private const double BPM = 120.0; // TODO make dynamic
+    private const double QuarterNoteDurationSeconds = 60.0 / BPM;
+    public int SlotWidth = 6;
+    private bool _isLooping = false;
     private Progression progression;
     private IProgressionGenerator generator;
-
     private List<TabNote> tabNotes;
     private List<TabColumn> TabColumns { get; set; } = new();
-    private TabColumn? LastClickedColumn { get; set; }
-    public int SlotWidth = 6;
 
+
+    /*=============================================================================
+    //  These functions allow JS to exclusively update the visual playhead 
+    =============================================================================*/
     private DotNetObjectReference<Index>? _dotNetRef;
     public int _highlightedColumnIndex = -1; // -1 means no highlight
-
-    private bool _isLooping = false;
-
-
-    protected override void OnInitialized()
-    {
-
-        // Initialize generator
-        int[] formula = { 1, 3, 5, 7 };
-        generator = new Generator(formula);
-
-        // Initialize progression
-        double beat = 1; // TODO make dynamic (right now we assume every chord starts on first beat)
-        double duration = 4; // TODO later make this dynamic
-        string key = "E";
-        List<Chord> chords = new List<Chord>
-            {
-                new Chord(ScaleDegree.One, ChordQuality.Major, 1, beat, duration),
-                new Chord(ScaleDegree.Five, ChordQuality.Major, 2, beat, duration),
-                new Chord(ScaleDegree.Two, ChordQuality.Minor, 3, beat, duration),
-                new Chord(ScaleDegree.Four, ChordQuality.Major, 4, beat, duration),
-                
-            };
-
-        progression = new Progression(key, chords, generator);
-        tabNotes = FretboardMapper.MapNotesToTab(progression.Notes);
-
-        TabColumns = TabFormatter.RenderAscii(tabNotes, SlotWidth);
-
-    }
-
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -256,8 +111,11 @@
             await JS.InvokeVoidAsync("toneInterop.setDotNetReference", _dotNetRef);
         }
     }
+    public void Dispose()
+    {
+        _dotNetRef?.Dispose();
+    }
 
-    // CRITICAL: This method is called from JavaScript (audio.js)
     [JSInvokable]
     public void SetHighlightColumn(int columnIndex)
     {
@@ -299,42 +157,53 @@
         }
     }
 
-    // Clean up the reference when the component is disposed
-    public void Dispose()
+    
+
+    /*=============================================================================
+    //                      Logic for Ui/UX Buttons
+    =============================================================================*/
+
+    private async Task GenerateMidiTrack()
     {
-        _dotNetRef?.Dispose();
+
+        // Initialize generator
+        int[] formula = { 1, 3, 5, 6 };
+        generator = new Generator(formula);
+
+        // Initialize progression
+        double beat = 1; // TODO make dynamic (right now we assume every chord starts on first beat)
+        double duration = 4; // TODO later make this dynamic
+        string key = "A";
+
+        List<Chord> chords = new List<Chord>
+        {
+            new Chord(ScaleDegree.Six, ChordQuality.Minor, 1, beat, duration),
+            new Chord(ScaleDegree.One, ChordQuality.Major, 2, beat, duration),
+            new Chord(ScaleDegree.Five, ChordQuality.Major, 3, beat, duration),
+            new Chord(ScaleDegree.Four, ChordQuality.Major, 4, beat, duration),
+            
+        };
+
+        progression = new Progression(key, chords, generator);
+        tabNotes = FretboardMapper.MapNotesToTab(progression.Notes);
+        TabColumns = TabFormatter.RenderAscii(tabNotes, SlotWidth);
+
+        // Convert C# Note objects to a simplified list for JS using the new helper
+        var jsNotes = MidiConverter.ConvertNotesToJsSequence(progression.Notes, BPM);
+        await JS.InvokeVoidAsync("toneInterop.generateMidiTrack", jsNotes, BPM);
     }
 
-
-
-
-
-
-    // HandleClick now takes the column's index
-    private async Task HandleClick(TabColumn column, int index)
+    private async Task PlayGeneratedAudio()
     {
-        LastClickedColumn = column;
-        
-        // Calculate the time in seconds based on measure and beat
-        // This matches the same calculation used in GenerateMidiTrack
-        double absoluteBeat = (column.Measure - 1) * 4 + (column.Beat - 1);
-        double timeInSeconds = absoluteBeat * QuarterNoteDurationSeconds;
-        
-        // Seek to that time
-        await SeekToTime(timeInSeconds, index);
+        await JS.InvokeVoidAsync("toneInterop.playGeneratedAudio");
+        // Don't set _highlightedColumnIndex here - let JavaScript control it via SetHighlightColumn
     }
 
-    private async Task SeekToTime(double timeInSeconds, int columnIndex)
-    {
-        // DON'T update the visual playhead here - let JavaScript do it via SetHighlightColumn
-        // This prevents race conditions where C# sets it but JS immediately overrides it
-        
-        // Tell JavaScript to seek to this specific time
-        // JavaScript will call SetHighlightColumn with the correct index
-        await JS.InvokeVoidAsync("toneInterop.seekToTime", timeInSeconds); 
+    private async Task PauseAudio() 
+    { 
+        await JS.InvokeVoidAsync("toneInterop.pauseAudio");
     }
 
-    // Update StopAudio to reset the playhead visually
     private async Task StopAudio() 
     {
         await JS.InvokeVoidAsync("toneInterop.stopAudio");
@@ -342,26 +211,6 @@
         StateHasChanged(); // Force UI update
     }
 
-    // Add this new method for the Play button to ensure playhead starts correctly
-    private async Task PlayGeneratedAudio()
-    {
-        await JS.InvokeVoidAsync("toneInterop.playGeneratedAudio");
-        // Don't set _highlightedColumnIndex here - let JavaScript control it via SetHighlightColumn
-    }
-
-    // Update PauseAudio to preserve the current playhead position
-    private async Task PauseAudio() 
-    { 
-        await JS.InvokeVoidAsync("toneInterop.pauseAudio");
-        // Don't clear _highlightedColumnIndex - keep it where it was paused
-        // The visual highlight should remain visible when paused
-    }
-
-
-
-
-
-    // Add this new method to the @code block
     private async Task ToggleLooping()
     {
         _isLooping = !_isLooping;
@@ -370,85 +219,18 @@
     }
 
 
-
-
-    private async Task RunTest() 
+    // Runs when user clicks the track to move the playhead
+    private async Task HandleClick(TabColumn column)
     {
-        await JS.InvokeVoidAsync("testJS");
-    }
 
-
-    private bool audioStarted = false;
-
-    private async Task StartAudio()
-    {
-        await JS.InvokeVoidAsync("toneInterop.startAudio");
-        audioStarted = true;
-    }
-
-    private async Task PlayTone()
-    {
-        if (!audioStarted)
-        {
-            Console.WriteLine("⚠️ Please start audio first!");
-            return;
-        }
-
-        await JS.InvokeVoidAsync("toneInterop.playNote", "C3", "8n");
-    }
-
-    private async Task GenerateAudioFile()
-    {
-        await JS.InvokeVoidAsync("toneInterop.generateAudioFile");
-    }
-
-
-
-
-
-    // Set a common BPM for the track
-    private const double BPM = 120.0;
-    private const double QuarterNoteDurationSeconds = 60.0 / BPM;
-
-    // TODO move this elsewhere
-    private async Task GenerateMidiTrack()
-    {
-        // 1. Convert C# Note objects to a simplified list for JS
-        var jsNotes = progression.Notes.Select((note, index) =>
-        {
-            // Convert Measure/Beat/Duration to an absolute time in seconds (for Tone.js)
-            // Time Signature is 4/4 (4 beats per measure)
-            // Start Time in Beats = (Measure - 1) * 4 + (Beat - 1)
-            double absoluteBeat = (note.Measure - 1) * 4 + (note.Beat - 1);
-            
-            // Convert Beats to Seconds
-            double startTimeSeconds = absoluteBeat * QuarterNoteDurationSeconds;
-
-            // Duration in Seconds
-            double durationSeconds = note.Duration * QuarterNoteDurationSeconds;
-
-            // CRITICAL FIX: Calculate the correct columnIndex
-            // Account for the header column (index 0) and bar lines
-            // Each measure has: 1 bar line + 4 content columns (for 4 beats)
-            // Formula: headerColumn(1) + (measure-1) * (barLine + 4beats) + barLine + beatOffset
-            int measureOffset = (note.Measure - 1) * 5; // 5 = 1 bar line + 4 beats
-            int beatOffset = (int)(note.Beat - 1); // Beat is 1-indexed
-            int columnIndex = measureOffset + 1 + beatOffset; // 1 for header + measure offset + 1 for bar line + beat
-
-            return new
-            {
-                midi = note.MidiNumber,
-                time = startTimeSeconds,
-                duration = durationSeconds,
-                columnIndex = columnIndex  
-            };
-        }).ToList();
-
-        // 2. Log and call the JS function
-        Console.WriteLine($"Sending {jsNotes.Count} notes to JS at {BPM} BPM.");
+        // Calculate the time (in seconds) with same calculation used in GenerateMidiTrack
+        double absoluteBeat = (column.Measure - 1) * 4 + (column.Beat - 1);
+        double timeInSeconds = absoluteBeat * QuarterNoteDurationSeconds;
         
-        // Call the new JavaScript interop function
-        await JS.InvokeVoidAsync("toneInterop.generateMidiTrack", jsNotes, BPM);
+        // Seek to that time
+        await JS.InvokeVoidAsync("toneInterop.seekToTime", timeInSeconds); 
+
+        // JS handles visual update
     }
 
 

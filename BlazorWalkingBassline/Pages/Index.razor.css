@@ -1,0 +1,74 @@
+/* CRITICAL: Use a monospaced font for perfect ASCII alignment */
+.tab-output {
+    font-family: 'Courier New', monospace;
+    font-size: 1.2rem;
+    line-height: 1.25; /* Space out the lines slightly */
+    white-space: pre; /* Preserve whitespace exactly as formatted */
+    display: flex; /* Arrange columns horizontally */
+    flex-wrap: nowrap;
+    overflow-x: auto; /* Allow horizontal scrolling if the tab is very long */
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    border: 1px solid #444;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.tab-column-wrapper {
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+    /* Padding to visually space out the columns slightly */
+    padding: 0 2px; 
+}
+
+/* Style for the static header (GDAE) */
+.tab-header {
+    /* Fix the header width for better alignment */
+    width: 1rem; 
+    font-weight: bold;
+    color: #ff9800; /* Amber for tuning names */
+    border-right: 1px solid #555;
+    margin-right: 4px;
+    padding-right: 4px;
+    flex-shrink: 0; /* Prevents shrinking */
+}
+
+/* Style for content columns (notes/dashes) */
+.tab-content {
+    min-width: var(--slot-width-ch); 
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+}
+
+/* Style for bar lines (|) */
+.tab-bar-line {
+    font-weight: bold;
+    color: #9e9e9e;
+    margin: 0 1px;
+    width: 1px; /* Minimal width for a clean vertical line */
+    flex-shrink: 0;
+}
+
+/* Span for each string line (ensures vertical stacking) */
+.string-line {
+    display: block;
+}
+
+/* Hover effect for content columns (will be replaced by animation later) */
+.tab-content:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* New style for the playhead highlight */
+.playhead-highlight {
+    background-color: rgba(255, 255, 255, 0.1); /* Amber/Orange for emphasis */
+    /* Make sure the hover effect doesn't override the playhead */
+    transition: background-color 0.1s ease;
+}
+
+/* Keep hover effect but don't let it override the active playhead */
+.tab-content:hover:not(.playhead-highlight) {
+    background-color: rgba(255, 255, 255, 0.1);
+}
