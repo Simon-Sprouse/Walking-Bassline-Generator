@@ -11,11 +11,16 @@ public static class TabFormatter
     public static List<TabColumn> RenderAscii(List<TabNote> tabNotes, int SlotWidth)
     {
         var columns = new List<TabColumn>();
+        
+        // Total number of strings, assuming 4 strings
+        const int TotalStrings = 4; 
 
-        // 1. Add the static Header column (GDAE)
+        // 1. Add the static Header column (EADG order for tab display)
+        // We reverse the StringNames list here to display them top-to-bottom as E, A, D, G
         columns.Add(new TabColumn
         {
-            StringLines = new List<string>(StringNames),
+            // Iterate backward to get E, A, D, G order (assuming StringNames = G, D, A, E)
+            StringLines = StringNames.Reverse().ToList(), 
             Type = ColumnType.HeaderLine,
             Measure = 0,
             Beat = 0.0,
@@ -25,12 +30,12 @@ public static class TabFormatter
         // Group notes by Measure and Beat for easy lookup
         var noteLookup = tabNotes.ToLookup(n => (n.Measure, n.Beat));
 
-        // Start from the first measure and beat
+        // Determine the loop end measure (or keep 4 as a sensible default)
+        int maxMeasure = tabNotes.Any() ? Math.Max(4, tabNotes.Max(n => n.Measure)) : 4;
         int currentMeasure = tabNotes.Any() ? tabNotes.Min(n => n.Measure) : 1;
         
-        // Loop for a set number of measures (e.g., 4 measures for a simple progression)
-        // In a real app, this would loop until the end of the last note's measure.
-        for (; currentMeasure <= 4; currentMeasure++) 
+        // Loop for the measures in the progression
+        for (; currentMeasure <= maxMeasure; currentMeasure++) 
         {
             for (double beat = 1.0; beat <= BeatsPerMeasure; beat++)
             {
@@ -44,10 +49,11 @@ public static class TabFormatter
                     Type = ColumnType.Content
                 };
 
-                // Create the content for each of the four strings
-                for (int stringIndex = 0; stringIndex < StringNames.Length; stringIndex++)
+                // *** CRITICAL FIX: Iterate Backward (from E string to G string) ***
+                // This ensures StringLines are added in the correct E-A-D-G visual order.
+                for (int stringIndex = TotalStrings - 1; stringIndex >= 0; stringIndex--) 
                 {
-                    int stringNumber = stringIndex; // Our internal string index is 0 to 3 (G to E)
+                    int stringNumber = stringIndex; // Our internal string index is 0(G) to 3(E)
                     
                     // Look up the TabNote for this specific measure, beat, and string.
                     var noteAtPosition = noteLookup[(currentMeasure, beat)]
@@ -70,15 +76,19 @@ public static class TabFormatter
                         FormatStringInSlot(fretData, SlotWidth, '-')
                     );
                 }
+                // *** End of Fix ***
 
                 columns.Add(currentColumn);
 
                 // 3. Insert Bar Line after the last beat of the measure
                 if (beat == BeatsPerMeasure)
                 {
+                    // The bar lines also need to be in the correct E-A-D-G order
+                    // By iterating backward above, currentColumn.StringLines is now E-A-D-G.
+                    // We generate the bar line string list by reversing the standard G|D|A|E| array.
                     columns.Add(new TabColumn
                     {
-                        StringLines = new List<string> { "|", "|", "|", "|" },
+                        StringLines = new List<string> { "|", "|", "|", "|" }, // E, A, D, G
                         Measure = currentMeasure + 1, // Time point is the start of the next measure
                         Beat = 1.0,
                         Duration = 0.0,

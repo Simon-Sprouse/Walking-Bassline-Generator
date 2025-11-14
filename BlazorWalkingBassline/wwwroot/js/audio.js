@@ -19,6 +19,85 @@ window.toneInterop = {
         }
     },
 
+    async generateMidiTrack(notes, bpm = 120) {
+        if (!this.audioStarted) {
+            // Ensure audio context is started on user interaction
+            await this.startAudio(); 
+        }
+
+        console.log(`🎶 Generating audio track for ${notes.length} notes at ${bpm} BPM...`);
+        
+        // Find the total duration needed for the offline rendering
+        // The last note's end time determines the length of the track
+        let totalDurationSeconds = 0;
+        notes.forEach(note => {
+            const endTime = note.time + note.duration;
+            if (endTime > totalDurationSeconds) {
+                totalDurationSeconds = endTime;
+            }
+        });
+
+        // Add a small buffer at the end
+        totalDurationSeconds += 0.25; 
+
+        // Use Offline rendering to precompute the audio buffer
+        const buffer = await Tone.Offline(({ transport }) => {
+            
+            // Set the BPM for the offline transport
+            transport.bpm.value = bpm;
+
+            const bassSynth = new Tone.MonoSynth({
+                oscillator: {
+                    type: "sine5", 
+                    modulationIndex: 2,
+                    harmonicity: 1.5
+                },
+                filter: {
+                    Q: 2,            // adds resonance for more bass “body”
+                    type: "lowpass",
+                    rolloff: -24
+                },
+                envelope: {
+                    attack: 0.01,    // almost instant pluck
+                    decay: 0.3,      // slightly longer decay
+                    sustain: 0.5,    // moderate body
+                    release: 0.8     // smooth release
+                },
+                filterEnvelope: {
+                    attack: 0.01,
+                    decay: 0.3,
+                    sustain: 0.5,
+                    release: 0.8,
+                    baseFrequency: 100,
+                    octaves: 4
+                }
+            }).toDestination();
+
+
+            // Create a Tone.Part to schedule all the notes
+            const part = new Tone.Part((time, value) => {
+                // The time is the absolute time in seconds (already calculated in C#)
+                // The value is the note data we passed in the array
+                const freq = Tone.Midi(value.midi).toFrequency();
+                bassSynth.triggerAttackRelease(freq, value.duration, time);
+            }, notes).start(0); // Start scheduling from the very beginning
+
+            // Start the transport (playback timeline)
+            transport.start(0);
+
+        }, totalDurationSeconds); // Total duration in seconds
+
+        // Store buffer for playback
+        this.generatedBuffer = buffer;
+        console.log("✅ Audio track buffer generated successfully.");
+
+        // Optional: you can still generate a file if you uncomment the code below
+        // const wavBlob = await this._bufferToWaveBlob(buffer);
+        // console.log("Generated WAV Blob:", wavBlob);
+        
+        return "MIDI track and audio buffer generated!";
+    },
+
     startAudio() {
 
         if (!this.audioContext) {
@@ -50,47 +129,7 @@ window.toneInterop = {
         this.synth.triggerAttackRelease(note, duration);
     },
 
-    async generateAudioFile() {
-        if (!this.audioStarted) {
-            await this.startAudio();
-        }
-
-        console.log("🎶 Generating simple 4-note audio file...");
-
-        const synth = new Tone.Synth().toDestination();
-
-        // Create a simple 4-note sequence
-        const notes = ["C2", "E2", "G2", "B2"];
-        const duration = "4n";
-
-        // Use Offline rendering to precompute the audio buffer
-        const buffer = await Tone.Offline(({ transport }) => {
-            const s = new Tone.Synth().toDestination();
-            let time = 0;
-            notes.forEach(note => {
-                s.triggerAttackRelease(note, duration, time);
-                time += 0.5; // half second between notes
-            });
-            transport.start(0);
-        }, 2.5); // total duration in seconds
-
-        // Store buffer for playback
-        this.generatedBuffer = buffer;
-
-        // Convert to WAV file and make downloadable
-        const wavBlob = await this._bufferToWaveBlob(buffer);
-        const url = URL.createObjectURL(wavBlob);
-
-        console.log("✅ Generated WAV Blob:", wavBlob);
-
-        // Optional: trigger download
-        // const a = document.createElement("a");
-        // a.href = url;
-        // a.download = "simple_bassline.wav";
-        // a.click();
-
-        return "Audio file generated successfully!";
-    },
+  
 
     async _bufferToWaveBlob(audioBuffer) {
         const numOfChan = audioBuffer.numberOfChannels,
@@ -208,5 +247,11 @@ window.toneInterop = {
         }
     }
 
+
+
+
+
+
+    
 
 };

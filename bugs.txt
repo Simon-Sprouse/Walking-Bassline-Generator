@@ -1,0 +1,24 @@
+Hello and welcome to the bug database for this project:
+
+-------
+BUGS
+-------
+Key changes not possible / supported
+Chords do not have modal definitions without scale degree (abstract major / agumented etc)
+No way to fit more than one chord per measure. Chords have no rythmic detail. 
+No option to print chord note names rather than scale degrees (chord class might not even know)
+Measures are always 4/4
+Intervals do not go higher than one octave (no 8)
+Intervals do not go lower than root
+
+
+-----------
+Features
+-----------
+UI controls
+Change from roman numeral numbers to Nashville numbers
+Tab visual controls
+Audio playback
+Audio accompaniment
+User profile
+Backend-server renders the audio
