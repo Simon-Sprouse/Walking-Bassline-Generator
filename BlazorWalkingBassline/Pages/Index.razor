@@ -15,6 +15,24 @@
 <PageTitle>Walking Basslines</PageTitle>
 <h1>Walking Bassline Generator</h1>
 
+<h2>Generator Controls</h2>
+<div class="bpm-control-group">
+    <label for="bpm-input">BPM:</label>
+    <input id="bpm-input" 
+       type="range" 
+       min="60" 
+       max="240" 
+       step="1" 
+       value="@_currentBPM" 
+       @onchange="HandleBpmChange"  
+       style="width: 60px; margin-left: 5px;" 
+    />
+    <span style="font-weight: bold; margin-left: 10px;">
+        @(_currentBPM.ToString("F0"))
+    </span>
+</div>
+
+<h2>Track Controls</h2>
 <button @onclick="GenerateMidiTrack">Allow Broswer Audio</button>
 <button @onclick="PlayGeneratedAudio">Play Audio</button>
 <button @onclick="PauseAudio">Pause Audio</button>
@@ -86,8 +104,13 @@
 @code {
 
 
-    private const double BPM = 120.0; // TODO make dynamic
-    private const double QuarterNoteDurationSeconds = 60.0 / BPM;
+
+    private const int MinBpm = 60;
+    private const int MaxBpm = 240;
+    private double _currentBPM = 120.0; 
+    private double QuarterNoteDurationSeconds => 60.0 / _currentBPM;
+
+
     public int SlotWidth = 6;
     private bool _isLooping = false;
     private Progression progression;
@@ -163,6 +186,23 @@
     //                      Logic for Ui/UX Buttons
     =============================================================================*/
 
+    private async Task HandleBpmChange(ChangeEventArgs e) // 👈 ADD ChangeEventArgs
+    {
+        if (double.TryParse(e.Value?.ToString(), out double newValue))
+        {
+            _currentBPM = Math.Clamp(newValue, MinBpm, MaxBpm); 
+
+            // 4. Stop and Regenerate (using await for reliability)
+            await StopAudio(); 
+            await GenerateMidiTrack(); 
+            
+            StateHasChanged(); // force update
+        }
+        else
+        {
+            Console.WriteLine("Could not parse new BPM value.");
+        }
+    }
     private async Task GenerateMidiTrack()
     {
 
@@ -189,8 +229,8 @@
         TabColumns = TabFormatter.RenderAscii(tabNotes, SlotWidth);
 
         // Convert C# Note objects to a simplified list for JS using the new helper
-        var jsNotes = MidiConverter.ConvertNotesToJsSequence(progression.Notes, BPM);
-        await JS.InvokeVoidAsync("toneInterop.generateMidiTrack", jsNotes, BPM);
+        var jsNotes = MidiConverter.ConvertNotesToJsSequence(progression.Notes, _currentBPM);
+        await JS.InvokeVoidAsync("toneInterop.generateMidiTrack", jsNotes, _currentBPM);
     }
 
     private async Task PlayGeneratedAudio()

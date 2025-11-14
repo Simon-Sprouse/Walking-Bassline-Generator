@@ -34,7 +34,7 @@ window.toneInterop = {
         console.log("✅ .NET reference set.");
     },
 
-    async generateMidiTrack(notes, bpm = 120) {
+    async generateMidiTrack(notes, bpm) {
         if (!this.audioStarted) {
             await this.startAudio();
         }
@@ -154,19 +154,6 @@ window.toneInterop = {
         });
     },
 
-    playNote(note = "C2", duration = "4n") {
-        if (!this.audioStarted) {
-            console.warn("AudioContext not started. Call startAudio() first!");
-            return;
-        }
-
-        if (!this.synth) {
-            console.warn("Synth not initialized.");
-            return;
-        }
-
-        this.synth.triggerAttackRelease(note, duration);
-    },
 
     _getTimeColumnIndex(currentTime) {
         if (currentTime < 0) return -1;

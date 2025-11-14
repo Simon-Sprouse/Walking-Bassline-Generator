@@ -11,6 +11,7 @@ Measures are always 4/4
 Intervals do not go higher than one octave (no 8)
 Intervals do not go lower than root
 speaker pop when audio cuts
+bpm change does not have to restart track
 
 
 -----------
