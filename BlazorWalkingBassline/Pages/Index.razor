@@ -74,6 +74,7 @@
         transition: background-color 0.1s ease;
     }
 
+
     /* Style for bar lines (|) */
     .tab-bar-line {
         font-weight: bold;
@@ -92,16 +93,37 @@
     .tab-content:hover {
         background-color: rgba(255, 255, 255, 0.1);
     }
+
+
+
+
+    /* New style for the playhead highlight */
+    .playhead-highlight {
+        background-color: rgba(255, 165, 0, 0.4); /* Amber/Orange for emphasis */
+        /* Make sure the hover effect doesn't override the playhead */
+        transition: background-color 0.1s ease;
+    }
+
+    /* Keep hover effect but don't let it override the active playhead */
+    .tab-content:hover:not(.playhead-highlight) {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+
+
 </style>
 
 
 <h2>Bass Tab Preview</h2>
-
 <div class="tab-output">
     @if (TabColumns.Any())
     {
-        @foreach (var column in TabColumns)
+        @for (int i = 0; i < TabColumns.Count; i++)
         {
+            var column = TabColumns[i];
+            
+            // Determine if the current column should have the playhead highlight class
+            string columnClass = (i == _highlightedColumnIndex) ? "playhead-highlight" : "";
+
             if (column.Type == ColumnType.HeaderLine)
             {
                 <div class="tab-header tab-column-wrapper">
@@ -113,16 +135,17 @@
             }
             else if (column.Type == ColumnType.BarLine)
             {
-                <div class="tab-bar-line tab-column-wrapper" @onclick="() => HandleClick(column)">
+                <div class="tab-bar-line tab-column-wrapper"> 
                     @foreach (var line in column.StringLines)
                     {
                         <span class="string-line">@line</span>
                     }
                 </div>
             }
-            else /* Content or Spacer column */
+            else /* Content column */
             {
-                <div class="tab-content tab-column-wrapper" @onclick="() => HandleClick(column)">
+                @* This is now the ONLY clickable column type *@
+                <div class="tab-content tab-column-wrapper @columnClass" @onclick="() => HandleClick(column, i)">
                     @foreach (var line in column.StringLines)
                     {
                         <span class="string-line">@line</span>
@@ -176,9 +199,10 @@
     private List<TabColumn> TabColumns { get; set; } = new();
     private TabColumn? LastClickedColumn { get; set; }
     public int SlotWidth = 6;
-    @* private List<(Chord chord, List<int> notes)> chordNotesList;
 
-    private List<(Chord chord, List<TabNote>)> tabNotesList; *@
+    private DotNetObjectReference<Index>? _dotNetRef;
+    private int _highlightedColumnIndex = -1; // -1 means no highlight
+
 
     protected override void OnInitialized()
     {
@@ -206,13 +230,97 @@
 
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Create the .NET reference and pass it to JavaScript
+            _dotNetRef = DotNetObjectReference.Create(this);
+            // This is a new interop call we will add to audio.js
+            await JS.InvokeVoidAsync("toneInterop.setDotNetReference", _dotNetRef);
+        }
+    }
+
+    // CRITICAL: This method is called from JavaScript (audio.js)
+    [JSInvokable]
+    public void SetHighlightColumn(int columnIndex)
+    {
+        // Check for the "no highlight" signal
+        if (columnIndex == -1)
+        {
+            if (_highlightedColumnIndex != -1)
+            {
+                _highlightedColumnIndex = -1;
+                // Since this might be the end of playback or a pause gap, 
+                // we force StateHasChanged if the highlight was on.
+                StateHasChanged(); 
+            }
+            return;
+        }
+
+        // Handle valid highlight index
+        if (columnIndex >= 0 && columnIndex < TabColumns.Count)
+        {
+            // ONLY set the highlight index if the column is a Content column (a beat/note)
+            if (TabColumns[columnIndex].Type == ColumnType.Content)
+            {
+                if (columnIndex != _highlightedColumnIndex)
+                {
+                    _highlightedColumnIndex = columnIndex;
+                    // StateHasChanged is called implicitly/by Blazor
+                    // Console.WriteLine($"Highlighting content column index: {_highlightedColumnIndex}");
+                    StateHasChanged(); // Force update to ensure immediate highlight change
+                }
+                return;
+            }
+        }
+        
+        // If the index was for a non-content column but was not -1, remove the highlight
+        if (_highlightedColumnIndex != -1)
+        {
+             _highlightedColumnIndex = -1;
+             StateHasChanged();
+        }
+    }
+
+    // Clean up the reference when the component is disposed
+    public void Dispose()
+    {
+        _dotNetRef?.Dispose();
+    }
 
 
-    private void HandleClick(TabColumn column)
+
+
+
+    // HandleClick now takes the column's index
+    private void HandleClick(TabColumn column, int index)
     {
         LastClickedColumn = column;
+        // The playhead will now seek to this column
 
+        int m = column.Measure;
+        int real_index = (column.Measure - 1) * 4 + (int)column.Beat;
+        SeekToColumn(real_index);
     }
+
+    private async Task SeekToColumn(int index)
+    {
+        // Update the visual playhead immediately
+        _highlightedColumnIndex = index;
+        StateHasChanged();
+        
+        // Tell JavaScript to stop and restart audio at the time corresponding to this column index
+        await JS.InvokeVoidAsync("toneInterop.seekGeneratedAudio", index); 
+    }
+    
+    // Update StopAudio to reset the playhead visually
+    private async Task StopAudio() 
+    {
+        await JS.InvokeVoidAsync("toneInterop.stopAudio");
+        _highlightedColumnIndex = -1; // Reset visual playhead (or 0 for the header)
+    }
+
 
 
 
@@ -261,11 +369,7 @@
         await JS.InvokeVoidAsync("toneInterop.playGeneratedAudio");
     }
     
-    private async Task StopAudio() 
-    {
-        // resets playhead
-        await JS.InvokeVoidAsync("toneInterop.stopAudio");
-    }
+
 
     private async Task PauseAudio() 
     { 
@@ -283,7 +387,7 @@
     private async Task GenerateMidiTrack()
     {
         // 1. Convert C# Note objects to a simplified list for JS
-        var jsNotes = progression.Notes.Select(note =>
+        var jsNotes = progression.Notes.Select((note, index) =>
         {
             // Convert Measure/Beat/Duration to an absolute time in seconds (for Tone.js)
             // Time Signature is 4/4 (4 beats per measure)
@@ -296,11 +400,20 @@
             // Duration in Seconds
             double durationSeconds = note.Duration * QuarterNoteDurationSeconds;
 
+            // CRITICAL FIX: Calculate the correct columnIndex
+            // Account for the header column (index 0) and bar lines
+            // Each measure has: 1 bar line + 4 content columns (for 4 beats)
+            // Formula: headerColumn(1) + (measure-1) * (barLine + 4beats) + barLine + beatOffset
+            int measureOffset = (note.Measure - 1) * 5; // 5 = 1 bar line + 4 beats
+            int beatOffset = (int)(note.Beat - 1); // Beat is 1-indexed
+            int columnIndex = measureOffset + 1 + beatOffset; // 1 for header + measure offset + 1 for bar line + beat
+
             return new
             {
                 midi = note.MidiNumber,
-                time = startTimeSeconds, // Start time in seconds
-                duration = durationSeconds, // Duration in seconds
+                time = startTimeSeconds,
+                duration = durationSeconds,
+                columnIndex = columnIndex  
             };
         }).ToList();
 
