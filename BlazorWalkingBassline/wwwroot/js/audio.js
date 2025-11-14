@@ -10,6 +10,8 @@ window.toneInterop = {
     startTime: 0,
     pauseOffset: 0,
 
+    isLooping: false,
+
     dotNetRef: null,    
     timerID: null,      
     allNotes: [],
@@ -20,6 +22,11 @@ window.toneInterop = {
         } else {
             console.error("❌ Tone.js not found!");
         }
+    },
+
+    toggleLooping(shouldLoop) { 
+        this.isLooping = shouldLoop;
+        console.log(`🔁 Looping is now ${shouldLoop ? 'ON' : 'OFF'}.`);
     },
 
     setDotNetReference(dotNetRef) {
@@ -44,7 +51,7 @@ window.toneInterop = {
             }
         });
 
-        totalDurationSeconds += 0.25;
+        // totalDurationSeconds += 0.25;
 
         const buffer = await Tone.Offline(({ transport }) => {
 
@@ -120,11 +127,16 @@ window.toneInterop = {
 
         }, totalDurationSeconds);
 
+
+
         this.generatedBuffer = buffer;
         console.log("✅ Audio track buffer generated successfully.");
 
         return "MIDI track and audio buffer generated!";
     },
+
+    
+
 
 
     startAudio() {
@@ -259,6 +271,7 @@ window.toneInterop = {
             nativeBuffer.copyToChannel(this.generatedBuffer.getChannelData(i), i);
         }
 
+        // Must create a NEW AudioBufferSourceNode every time you call start()
         const source = context.createBufferSource();
         source.buffer = nativeBuffer;
         source.connect(context.destination);
@@ -273,20 +286,51 @@ window.toneInterop = {
         this.isPlaying = true;
         this._startPlaybackTimer();
 
-        // CRITICAL FIX: Store reference to current source to prevent race conditions
+        // CRITICAL UPDATE: Handle Looping logic in onended
         const currentSource = source;
         source.onended = () => {
             // Only process onended if this is still the active source
-            if (this.audioPlayer === currentSource && this.isPlaying) {
-                this.pauseOffset = 0;
-                this.isPlaying = false;
-                this.audioPlayer = null;
-                console.log("Playback finished.");
-                if (this.dotNetRef) {
-                    this.dotNetRef.invokeMethodAsync('SetHighlightColumn', -1);
+            if (this.audioPlayer === currentSource) {
+
+                if (this.isLooping) {
+                    console.log("🔁 Loop end reached, restarting playback.");
+
+                    // Cleanly tear down current playback state
+                    this.pauseOffset = 0;
+                    this.isPlaying = false;
+                    this.audioPlayer = null;
+
+                    // Clear any existing timer so we don't create duplicates
+                    if (this.timerID) {
+                        clearInterval(this.timerID);
+                        this.timerID = null;
+                    }
+
+                    // Start playback again from the start (this will create a new source)
+                    // Use setTimeout to ensure audio nodes have finished cleaning up
+                    setTimeout(() => {
+                        this.playGeneratedAudio();
+                    }, 10);
+
+                } else {
+                    // Non-looping: cleanup and notify .NET to clear highlight
+                    this.pauseOffset = 0;
+                    this.isPlaying = false;
+                    this.audioPlayer = null;
+
+                    if (this.timerID) {
+                        clearInterval(this.timerID);
+                        this.timerID = null;
+                    }
+
+                    console.log("Playback finished (non-looping).");
+                    if (this.dotNetRef) {
+                        this.dotNetRef.invokeMethodAsync('SetHighlightColumn', -1);
+                    }
                 }
             }
         };
+
     },
 
     pauseAudio() {
@@ -296,9 +340,11 @@ window.toneInterop = {
         this.pauseOffset = context.currentTime - this.startTime;
 
         // Stop the source and clear reference
-        this.audioPlayer.stop();
-        this.audioPlayer = null;
-        this.isPlaying = false;
+        // Stopping also triggers onended, but the `if (this.audioPlayer === currentSource && this.isPlaying)` check
+        // inside onended will prevent an unwanted loop start if this.isPlaying is set to false first.
+        this.audioPlayer.stop(); 
+        this.audioPlayer = null; // Clear the reference
+        this.isPlaying = false;  // Set state to not playing *before* the stop/onended fires
         
         if (this.timerID) {
             clearInterval(this.timerID);

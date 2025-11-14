@@ -189,6 +189,17 @@
 <button @onclick="PlayGeneratedAudio">Play Generated Audio</button>
 <button @onclick="PauseAudio">Pause Audio</button>
 <button @onclick="StopAudio">Stop Audio</button>
+@* ⭐ NEW LOOP BUTTON *@
+<button @onclick="ToggleLooping" class="@(_isLooping ? "btn-success" : "btn-secondary")">
+    @if (_isLooping)
+    {
+        <span>✅ Looping ON</span>
+    }
+    else
+    {
+        <span>🔁 Looping OFF</span>
+    }
+</button>
 
 <p>Playhead: @_highlightedColumnIndex</p>
 
@@ -204,6 +215,8 @@
 
     private DotNetObjectReference<Index>? _dotNetRef;
     public int _highlightedColumnIndex = -1; // -1 means no highlight
+
+    private bool _isLooping = false;
 
 
     protected override void OnInitialized()
@@ -223,7 +236,7 @@
                 new Chord(ScaleDegree.Five, ChordQuality.Major, 2, beat, duration),
                 new Chord(ScaleDegree.Two, ChordQuality.Minor, 3, beat, duration),
                 new Chord(ScaleDegree.Four, ChordQuality.Major, 4, beat, duration),
-
+                
             };
 
         progression = new Progression(key, chords, generator);
@@ -348,7 +361,13 @@
 
 
 
-
+    // Add this new method to the @code block
+    private async Task ToggleLooping()
+    {
+        _isLooping = !_isLooping;
+        await JS.InvokeVoidAsync("toneInterop.toggleLooping", _isLooping);
+        StateHasChanged(); // Update the button text
+    }
 
 
 
