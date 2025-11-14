@@ -8,14 +8,16 @@
     :host {
         --slot-width-ch: @(SlotWidth)ch;
     }
+
 </style>
-
-
 
 <PageTitle>Walking Basslines</PageTitle>
 <h1>Walking Bassline Generator</h1>
 
+
 <h2>Generator Controls</h2>
+
+
 <div class="bpm-control-group">
     <label for="bpm-input">BPM:</label>
     <input id="bpm-input" 
@@ -31,6 +33,84 @@
         @(_currentBPM.ToString("F0"))
     </span>
 </div>
+
+<div class="key-control-group" style="margin-top: 15px;">
+    <label for="key-select" style="font-weight: bold;">Key:</label>
+    <select id="key-select" value="@_currentKey" @onchange="HandleKeyChange" style="margin-left: 5px;">
+        @foreach (var key in AvailableKeys)
+        {
+            <option value="@key">@key</option>
+        }
+    </select>
+</div>
+
+<div class="formula-control-group" style="margin-top: 15px;">
+    <label style="font-weight: bold; display: block; margin-bottom: 5px;">Walking Formula (Scale Degrees 1-7):</label>
+    <div style="display: flex; gap: 10px;">
+        @for (int i = 0; i < _formula.Length; i++)
+        {
+            // Use the index 'i' in the lambda to specify which slot is being updated
+            int index = i; // Create a copy for the lambda to capture correctly
+            <div style="text-align: center;">
+                <label>Beat @(i + 1)</label>
+                <input 
+                    type="number" 
+                    min="1" 
+                    max="7" 
+                    value="@_formula[index]" 
+                    @onchange="(e) => HandleFormulaChange(index, e)" 
+                    style="width: 40px; text-align: center;" 
+                />
+            </div>
+        }
+    </div>
+</div>
+
+
+<div class="progression-editor">
+    @for (int i = 0; i < _chordProgressionData.Count; i++)
+    {
+        int index = i; // Capture index for lambda
+        var chordData = _chordProgressionData[index];
+
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+            <span style="font-weight: bold;">Measure @(i + 1):</span>
+            
+            <select 
+                value="@chordData.Degree" 
+                @onchange="(e) => HandleDegreeChange(index, e)"
+                style="width: 80px;"
+            >
+                @foreach (ScaleDegree degree in Enum.GetValues(typeof(ScaleDegree)))
+                {
+                    <option value="@degree">@GetDegreeName(degree)</option>
+                }
+            </select>
+
+            <select 
+                value="@chordData.Quality" 
+                @onchange="(e) => HandleQualityChange(index, e)"
+                style="width: 100px;"
+            >
+                @foreach (ChordQuality quality in Enum.GetValues(typeof(ChordQuality)))
+                {
+                    <option value="@quality">@quality.ToString()</option>
+                }
+            </select>
+            
+            <button class="delete-chord-btn" @onclick="() => RemoveChord(index)">
+                &times; Remove
+            </button>
+        </div>
+    }
+
+    <button class="add-chord-btn" @onclick="AddChord">
+        + Add Chord (Measure @(_chordProgressionData.Count + 1))
+    </button>
+</div>
+
+
+
 
 <h2>Track Controls</h2>
 <button @onclick="GenerateMidiTrack">Allow Broswer Audio</button>
@@ -94,21 +174,26 @@
     }
     else
     {
-        <p>Generating Tab...</p>
+        <p>Please Press the Button to Allow Broswer Audio...</p>
     }
 </div>
 
 
-
-
 @code {
 
-
-
+    // ... Existing properties for BPM, Key, Formula, etc. ...
     private const int MinBpm = 60;
     private const int MaxBpm = 240;
     private double _currentBPM = 120.0; 
     private double QuarterNoteDurationSeconds => 60.0 / _currentBPM;
+
+    private List<string> AvailableKeys = new List<string>
+    {
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"
+    };
+    private string _currentKey = "A"; // 2. New state variable, initialized to "
+
+    private int[] _formula = { 1, 3, 5, 6 };
 
 
     public int SlotWidth = 6;
@@ -119,8 +204,20 @@
     private List<TabColumn> TabColumns { get; set; } = new();
 
 
+    // We only need Degree and Quality here; Measure/Beat/Duration will be calculated on Generate.
+    private List<Chord> _chordProgressionData = new List<Chord>
+    {
+        // Initial default progression (The old hardcoded one)
+        new Chord(ScaleDegree.Six, ChordQuality.Minor, 0, 0, 0),
+        new Chord(ScaleDegree.One, ChordQuality.Major, 0, 0, 0),
+        new Chord(ScaleDegree.Five, ChordQuality.Major, 0, 0, 0),
+        new Chord(ScaleDegree.Four, ChordQuality.Major, 0, 0, 0),
+    };
+
+
+
     /*=============================================================================
-    //  These functions allow JS to exclusively update the visual playhead 
+    //  JS Interop functions (SetHighlightColumn, Dispose, OnAfterRenderAsync)
     =============================================================================*/
     private DotNetObjectReference<Index>? _dotNetRef;
     public int _highlightedColumnIndex = -1; // -1 means no highlight
@@ -186,15 +283,97 @@
     //                      Logic for Ui/UX Buttons
     =============================================================================*/
 
+    // Helper to get a clean name for the UI dropdown
+    private string GetDegreeName(ScaleDegree degree) => degree.ToString().Replace("Flat", "♭").Replace("Sharp", "♯");
+    
+    private async Task HandleDegreeChange(int index, ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ScaleDegree>(e.Value?.ToString(), out var newDegree))
+        {
+            // Create a new Chord object for immutability (best practice)
+            var oldChord = _chordProgressionData[index];
+            _chordProgressionData[index] = new Chord(
+                newDegree, 
+                oldChord.Quality, 
+                0, 0, 0); // Measure/Beat/Duration are placeholders
+            
+            await StopAndRegenerate();
+        }
+    }
+
+    private async Task HandleQualityChange(int index, ChangeEventArgs e)
+    {
+        if (Enum.TryParse<ChordQuality>(e.Value?.ToString(), out var newQuality))
+        {
+            // Create a new Chord object for immutability
+            var oldChord = _chordProgressionData[index];
+            _chordProgressionData[index] = new Chord(
+                oldChord.Degree, 
+                newQuality, 
+                0, 0, 0); // Measure/Beat/Duration are placeholders
+            
+            await StopAndRegenerate();
+        }
+    }
+
+    private async Task AddChord()
+    {
+        // Add a default chord (e.g., C Major / I Major)
+        _chordProgressionData.Add(new Chord(ScaleDegree.One, ChordQuality.Major, 0, 0, 0));
+        await StopAndRegenerate();
+    }
+
+    private async Task RemoveChord(int index)
+    {
+        if (_chordProgressionData.Count > 1) // Ensure at least one chord remains
+        {
+            _chordProgressionData.RemoveAt(index);
+            await StopAndRegenerate();
+        }
+    }
+
+    private async Task StopAndRegenerate()
+    {
+        await StopAudio(); 
+        await GenerateMidiTrack(); 
+    }
+
+
+
+    private async Task HandleFormulaChange(int index, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int newValue))
+        {
+            // Clamp the value to ensure it is between 1 and 7 (scale degrees)
+            int clampedValue = Math.Clamp(newValue, 1, 7);
+            
+            // Update the formula array at the specific index
+            _formula[index] = clampedValue; 
+
+            await StopAndRegenerate();
+        }
+        else
+        {
+            Console.WriteLine("Could not parse formula value.");
+        }
+    }
+
+    private async Task HandleKeyChange(ChangeEventArgs e)
+    {
+        _currentKey = e.Value?.ToString() ?? "C"; // Default to C if something goes wrong
+
+        await StopAndRegenerate();
+        
+        StateHasChanged();
+    }
+
     private async Task HandleBpmChange(ChangeEventArgs e) // 👈 ADD ChangeEventArgs
     {
         if (double.TryParse(e.Value?.ToString(), out double newValue))
         {
             _currentBPM = Math.Clamp(newValue, MinBpm, MaxBpm); 
 
-            // 4. Stop and Regenerate (using await for reliability)
-            await StopAudio(); 
-            await GenerateMidiTrack(); 
+            await StopAndRegenerate();
             
             StateHasChanged(); // force update
         }
@@ -203,28 +382,42 @@
             Console.WriteLine("Could not parse new BPM value.");
         }
     }
+
+
     private async Task GenerateMidiTrack()
     {
-
         // Initialize generator
-        int[] formula = { 1, 3, 5, 6 };
-        generator = new Generator(formula);
+        generator = new Generator(_formula);
 
-        // Initialize progression
-        double beat = 1; // TODO make dynamic (right now we assume every chord starts on first beat)
-        double duration = 4; // TODO later make this dynamic
-        string key = "A";
+        // 1. Create the final, fully-defined list of Chord objects
+        List<Chord> chordsToGenerate = new List<Chord>();
 
-        List<Chord> chords = new List<Chord>
+        // 2. Iterate through the user-defined progression and implicitly calculate Measure/Beat/Duration
+        for (int i = 0; i < _chordProgressionData.Count; i++)
         {
-            new Chord(ScaleDegree.Six, ChordQuality.Minor, 1, beat, duration),
-            new Chord(ScaleDegree.One, ChordQuality.Major, 2, beat, duration),
-            new Chord(ScaleDegree.Five, ChordQuality.Major, 3, beat, duration),
-            new Chord(ScaleDegree.Four, ChordQuality.Major, 4, beat, duration),
+            var userChord = _chordProgressionData[i];
             
-        };
+            // - Every chord is 4 beats (duration)
+            // - Starts on beat 1 (beat)
+            // - Gets its own measure (i + 1)
+            int measure = i + 1;
+            double beat = 1; 
+            double duration = 4;
 
-        progression = new Progression(key, chords, generator);
+            // Create a new Chord instance with the calculated time information
+            var fullyDefinedChord = new Chord(
+                userChord.Degree, 
+                userChord.Quality, 
+                measure, 
+                beat, 
+                duration
+            );
+            
+            chordsToGenerate.Add(fullyDefinedChord);
+        }
+
+        // 3. Use the new dynamic list
+        progression = new Progression(_currentKey, chordsToGenerate, generator);
         tabNotes = FretboardMapper.MapNotesToTab(progression.Notes);
         TabColumns = TabFormatter.RenderAscii(tabNotes, SlotWidth);
 
@@ -272,6 +465,5 @@
 
         // JS handles visual update
     }
-
 
 }

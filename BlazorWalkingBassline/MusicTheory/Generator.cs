@@ -11,6 +11,8 @@ public class Generator : IProgressionGenerator
 
     private readonly int[] Formula;
 
+    // TODO move all this music theory stuff into a separate logic class
+
     private readonly string[] Notes =
             { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
@@ -42,9 +44,16 @@ public class Generator : IProgressionGenerator
         { ScaleDegree.Seven,     new [] {0, 1, 3, 5, 6, 8, 10} }, // Locrian
     };
 
-
-
-
+    private static readonly Dictionary<ScaleDegree, ChordQuality> diatonicQualityMap = new() 
+    {
+        { ScaleDegree.One, ChordQuality.Major },
+        { ScaleDegree.Two, ChordQuality.Minor },
+        { ScaleDegree.Three, ChordQuality.Minor },
+        { ScaleDegree.Four, ChordQuality.Major },
+        { ScaleDegree.Five, ChordQuality.Major }, 
+        { ScaleDegree.Six, ChordQuality.Minor },
+        { ScaleDegree.Seven, ChordQuality.Diminished },
+    };
 
 
     // constructor
@@ -52,10 +61,6 @@ public class Generator : IProgressionGenerator
     {
         Formula = _formula;
     }
-
-
-
-
 
 
     // Given a key and scale degree, return the string note name for that degree
@@ -95,20 +100,51 @@ public class Generator : IProgressionGenerator
     // Helper to pick modal interval set based on degree + chord quality
     private static int[] GetModalIntervals(ScaleDegree degree, ChordQuality? quality)
     {
-        // Default mode based on degree (major scale harmony)
-        // TODO handle borrowed chords
-        if (DegreeToModeIntervals.TryGetValue(degree, out var mode))
-            return mode;
-
-        // Fallback by chord quality (use Ionian for major, Aeolian for minor, Locrian for diminished)
-        // TODO handle borrowed chords
-        return quality switch
         {
-            ChordQuality.Major => DegreeToModeIntervals[ScaleDegree.One],
-            ChordQuality.Minor => DegreeToModeIntervals[ScaleDegree.Six],
-            ChordQuality.Diminished => DegreeToModeIntervals[ScaleDegree.Seven],
-            _ => DegreeToModeIntervals[ScaleDegree.One]
-        };
+
+
+            // Check if the chord is diatonic to the parent major key
+            if (diatonicQualityMap.TryGetValue(degree, out var expectedQuality))
+            {
+                // We consider Major/Major7 and Minor/Minor7/Dom7 as matching their root quality for this check.
+                bool qualityMatches = (quality == expectedQuality) ||
+                                      (quality == ChordQuality.Major7 && expectedQuality == ChordQuality.Major) ||
+                                      (quality == ChordQuality.Minor7 && expectedQuality == ChordQuality.Minor) ||
+                                      (quality == ChordQuality.Dominant7 && (expectedQuality == ChordQuality.Major || degree == ScaleDegree.Five));
+                
+                if (qualityMatches)
+                {
+                    // Use the mode associated with that degree (e.g., IV Major -> Lydian intervals)
+                    if (DegreeToModeIntervals.TryGetValue(degree, out var mode))
+                    {
+                        return mode;
+                    }
+                }
+            }
+
+            // Fallback for Borrowed/Non-Diatonic Chords (use mode based on chord quality, not degree)
+            return quality switch
+            {
+                // Use Ionian (Mode 1) intervals for all Major/Maj7/Augmented chords
+                ChordQuality.Major or ChordQuality.Major7 or ChordQuality.Augmented => 
+                    DegreeToModeIntervals[ScaleDegree.One], // Ionian
+
+                // Use Aeolian (Mode 6) intervals for all Minor/Min7 chords
+                ChordQuality.Minor or ChordQuality.Minor7 => 
+                    DegreeToModeIntervals[ScaleDegree.Six], // Aeolian
+
+                // Use Mixolydian (Mode 5) intervals for Dominant7 chords
+                ChordQuality.Dominant7 => 
+                    DegreeToModeIntervals[ScaleDegree.Five], // Mixolydian
+
+                // Use Locrian (Mode 7) intervals for Diminished chords
+                ChordQuality.Diminished => 
+                    DegreeToModeIntervals[ScaleDegree.Seven], // Locrian
+
+                // Default to Major intervals if quality is null or unknown
+                _ => DegreeToModeIntervals[ScaleDegree.One] 
+            };
+        }
     }
 
 

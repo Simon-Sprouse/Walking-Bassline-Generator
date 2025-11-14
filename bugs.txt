@@ -12,6 +12,8 @@ Intervals do not go higher than one octave (no 8)
 Intervals do not go lower than root
 speaker pop when audio cuts
 bpm change does not have to restart track
+consecutive similar notes string together rythmically
+deleting chords reveals blank tabs for at least 4 bars
 
 
 -----------

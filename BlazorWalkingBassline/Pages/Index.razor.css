@@ -63,7 +63,7 @@
 
 /* New style for the playhead highlight */
 .playhead-highlight {
-    background-color: rgba(255, 255, 255, 0.1); /* Amber/Orange for emphasis */
+    background-color: rgba(255, 255, 255, 0.2); /* Amber/Orange for emphasis */
     /* Make sure the hover effect doesn't override the playhead */
     transition: background-color 0.1s ease;
 }
@@ -72,3 +72,5 @@
 .tab-content:hover:not(.playhead-highlight) {
     background-color: rgba(255, 255, 255, 0.1);
 }
+
+
